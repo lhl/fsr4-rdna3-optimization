@@ -58,6 +58,43 @@ The HIP kernels emulate the core compute loop of FSR4's quantized convolution pa
 
 Both paths use compile-time unrolled inner loops with configurable iteration depth, operating on 262,144 logical vectors per dispatch.
 
+### HIP Harness vs Real FSR4 Shaders
+
+Our HIP microkernels exercise the same *class* of quantized arithmetic that FSR4 uses, but they are **not a direct port** of the actual HLSL shader logic. The differences matter for interpreting results:
+
+| Aspect | HIP Harness | Real FSR4 HLSL |
+|---|---|---|
+| **INT8 dot product** | `amd_mixed_dot` (packed 4×INT8→INT32) or scalar INT8 multiply-accumulate | `dot2add(half2, half2, float)` -- unpacks INT8 to FP16 via `Unpack4h()`, accumulates in FP32 |
+| **FP8 compute** | Element-wise FMA via `hip_fp8` library | **Requires WMMA** -- `AmdWaveMatrixMultiply()` for 16×16 matrix ops with LDS staging |
+| **Data layout** | Flat 1D arrays, simple element-per-thread mapping | 3D/4D NHWC tensors with spatial tiling, specialized fast paths for common shapes (e.g., 8-channel input, 16-feature output) |
+| **Loop structure** | Single inner loop with configurable unroll depth | Nested `[unroll]` loops over kernel spatial dims (kx, ky), input channels, and output features in groups of 4 |
+| **Quantization** | Scale/bias dequantization with store-time requant | Same policy (FP32 accumulation, quantize once at store) but with structured per-layer learned scales |
+
+The harness is most useful as a **directional signal** about RDNA3.5 arithmetic throughput and memory behavior at the instruction level, not as a cycle-accurate proxy for full FSR4 frame time.
+
+### Real-World Implications
+
+Applying our microkernel findings to the actual FSR4 implementation would require changes at different levels depending on the optimization:
+
+**Directly applicable** (same policy, confirmed by both harness and HLSL source):
+- **Store-time quantization**: Accumulate in full precision, quantize once at output. The real HLSL already does this (`round(vs * rcpScale)` at the end of each convolution). Our harness confirmed that per-iteration requantization causes catastrophic regression (INT8 +194%, FP8 +476%). Any code path that requantizes mid-accumulation should be treated as a bug.
+- **Compile-time loop unrolling**: The real HLSL uses `[unroll]` on all kernel loops. Our harness confirmed ~12% gains from unrolling vs runtime loop control. ML2Code should ensure all generated inner loops remain statically unrollable.
+
+**Directionally relevant** (same hardware, different instruction mix):
+- **Scalar element-wise > packed `amd_mixed_dot`**: Our biggest INT8 win (~32%), but the real INT8 HLSL path uses FP16 `dot2add` rather than INT8 `amd_mixed_dot`. This suggests the INT8 dot product unit on gfx1151 may not be the fastest path. ML2Code should benchmark `dot2add` vs `amd_mixed_dot` vs scalar INT8 for the actual Conv2D operators on RDNA3.5 to determine whether the current `dot2add` approach is already optimal or whether an INT8-native path could be faster.
+- **LDS staging is slow on Strix Halo iGPU**: All four LDS variants we tested regressed (O10-O13), likely due to shared memory subsystem contention on iGPU. This is concerning for the FP8/WMMA path, which requires LDS staging (`groupshared uint inputLDS[]`) for wave matrix input loading. The WMMA path may underperform on iGPU vs dGPU for this reason.
+
+**Requires further investigation**:
+- **Thread block sizing**: Our harness found 256 threads (8 waves) optimal, but FSR4 shaders dispatch with `numthreads(32, 1, 1)` (single wave). The real shaders tile differently (one spatial position per thread, all features computed), so the occupancy tradeoffs are different. Worth profiling whether multi-wave dispatch could help for the larger residual block passes.
+- **14-pass dispatch overhead**: At ~5µs per INT8 kernel invocation, the 14-pass sequential pipeline has significant per-dispatch overhead relative to compute time on iGPU. Fusing adjacent passes or reducing pass count could improve end-to-end latency, but this requires ML2Code changes.
+
+**Recommendations for RDNA3.5 optimization** (actionable for ML2Code / FSR4 shader development):
+- Benchmark the actual `int8_NHWC/Conv2D_k3p1b` operator with `dot2add` vs an `amd_mixed_dot` variant on gfx1151 -- our results suggest native INT8 dot products may not be optimal on this specific ISA
+- Profile the FP8 WMMA path (`float8_NHWC/Conv2D_k2s2b`) on Strix Halo specifically -- LDS contention on iGPU may make WMMA less effective than on discrete RDNA3 GPUs like Navi 48
+- Validate that all ML2Code-generated code paths use store-time (not per-iteration) quantization
+- Consider `-O3` as the default compiler optimization level -- our testing found no benefit from `-O2` or `-Ofast/-ffast-math`, and `-O3` matched or beat all alternatives
+- Investigate pass fusion opportunities for the 14-pass pipeline, especially for the smaller residual block passes where dispatch overhead may dominate compute time on low-power iGPUs
+
 ## Before/After Performance (Main Summary)
 Comparison of the stable direct-TTY baseline vs the final selected defaults after the optimization loop.
 
