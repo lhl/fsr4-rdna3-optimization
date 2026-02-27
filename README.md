@@ -361,5 +361,3 @@ Total active AI compute time: **~3h 10m** (16m analysis + 2h 34m optimization + 
 4. **Token costs are dominated by context**: 55.7M tokens for the main Codex session sounds large, but 53.6M were prompt cache hits (cheap). The actual model reasoning was 74.9K tokens. Long-running tool-heavy sessions amortize context loading across many operations.
 
 5. **Human-AI handoff worked well**: The developer set up the environment, validated the methodology, then delegated execution. The AI autonomously made sound keep/drop decisions (verified by the developer upon return). The conservative decision gate (`min_uncertainty_pct=3%`) meant the AI erred toward caution rather than accepting noise as signal.
-
-6. **Tool specialization matters**: Claude Code (Opus 4.6) was better suited for deep source analysis and documentation synthesis -- tasks requiring comprehensive reading and structured writing. Codex CLI (GPT-5.3-Codex) excelled at the iterative build-benchmark-decide loop with its tool-calling and shell execution capabilities. Using each tool for its strength made the overall workflow more effective than either alone.
