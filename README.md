@@ -8,17 +8,17 @@ This is not a full DX12 frame-time benchmark of shipping FSR4 -- it isolates the
 
 ## FSR4 Model Overview
 
-FSR4 uses a **quantized CNN** with an encoder-bottleneck-decoder (U-Net style) architecture, compiled from ONNX to HLSL shaders via ML2Code. Key details:
+FSR4 uses a **quantized CNN** compiled from ONNX to HLSL shaders via ML2Code. In this repo, the generated v07 model is organized as an encoder/bottleneck/decoder pipeline with skip connections. Key details:
 
 - **Model version**: v07 (from `fsr4_model_v07_*.onnx`)
 - **Architecture**: Encoder-decoder CNN with skip connections
   - `encoder1`: Strided 2x2 convolution (DownscaleStridedConv2x2) for spatial downsampling
-  - `encoder2`: 2x residual blocks using depthwise separable convolutions (conv_dw + conv_pw_expand + conv_pw_contract)
-  - `encoder3`: 2x residual blocks with spatial mixing partial convolutions
+  - `encoder2`: 2x ConvNext-style residual blocks (`conv_dw` + `conv_pw_expand` + `conv_pw_contract`)
+  - `encoder3`: 2x FasterNet-style residual blocks with spatial-mixing partial convolutions
   - `bottleneck`: 2x residual blocks with spatial mixing + transposed 2x2 convolution (UpscaleConvTranspose2x2) for upsampling
   - `decoder3`/`decoder2`/`decoder1`: Mirror the encoder stages, each with residual blocks and upscale convolutions
   - Postprocessing: RCAS (Robust Contrast Adaptive Sharpening) and SPD (Single Pass Downsampler) with auto exposure
-- **Compute passes**: 14 sequential dispatch passes per frame (at 1080p), each with a pre/post quantization stage
+- **Compute passes**: 14 model passes (`pass0..pass13`) plus 13 post passes (`pass0_post..pass12_post`) at 1080p
 - **Scratch memory**: ~20 MB
 - **Weights**: ~88 KB per quality tier (quantized, stored as embedded dwords or `initializers.bin`)
 - **Input**: NHWC layout, 7 input channels (current + history frames), resolution-specific shaders for 1080p/2160p/4320p
@@ -44,7 +44,7 @@ RDNA3.5 (gfx1151, Strix Halo) provides native hardware acceleration for the quan
 | INT8 dot compute | Benchmarked | Uses `amd_mixed_dot` (packed 4-element INT8 dot product) and scalar INT8 paths. Scalar path outperformed packed by ~32%. |
 | FP8 (`e4m3`) compute | Benchmarked | Uses `hip_fp8` library for native FP8 conversion + FMA. Accumulates in FP32, quantizes once at store. |
 | WMMA path | Present in FSR4 source, not benchmarked | FSR4 source contains WMMA shader files for wave-level matrix ops. Outside scope of HIP microkernel harness. |
-| Wave size | Verified | `warpSize=32` confirmed on gfx1151. All kernels dispatch 256 threads (8 waves per threadgroup). |
+| Wave size | Verified | `warpSize=32` confirmed on gfx1151. The HIP harness default is 256 threads, while generated FSR4 model shaders use mixed groups (`32x1x1`, `64x1x1`, and `8x8x1`). |
 
 RDNA3.5 ISA reference (online):
 - https://github.com/woct0rdho/rdna35-isa-markdown
@@ -64,7 +64,7 @@ Our HIP microkernels exercise the same *class* of quantized arithmetic that FSR4
 
 | Aspect | HIP Harness | Real FSR4 HLSL |
 |---|---|---|
-| **INT8 dot product** | `amd_mixed_dot` (packed 4×INT8→INT32) or scalar INT8 multiply-accumulate | `dot2add(half2, half2, float)` -- unpacks INT8 to FP16 via `Unpack4h()`, accumulates in FP32 |
+| **INT8 dot product** | `amd_mixed_dot` (packed 4×INT8→INT32) or scalar INT8 multiply-accumulate | Mixed path: pass 0 uses FP16 `dot2add` (`Unpack4h`), while passes 1-13 are dominated by INT8 `dot4add_i8packed` (`DOT4_ENABLED=1`) in fused operators |
 | **FP8 compute** | Element-wise FMA via `hip_fp8` library | **Requires WMMA** -- `AmdWaveMatrixMultiply()` for 16×16 matrix ops with LDS staging |
 | **Data layout** | Flat 1D arrays, simple element-per-thread mapping | 3D/4D NHWC tensors with spatial tiling, specialized fast paths for common shapes (e.g., 8-channel input, 16-feature output) |
 | **Loop structure** | Single inner loop with configurable unroll depth | Nested `[unroll]` loops over kernel spatial dims (kx, ky), input channels, and output features in groups of 4 |
@@ -81,19 +81,19 @@ Applying our microkernel findings to the actual FSR4 implementation would requir
 - **Compile-time loop unrolling**: The real HLSL uses `[unroll]` on all kernel loops. Our harness confirmed ~12% gains from unrolling vs runtime loop control. ML2Code should ensure all generated inner loops remain statically unrollable.
 
 **Directionally relevant** (same hardware, different instruction mix):
-- **Scalar element-wise > packed `amd_mixed_dot`**: Our biggest INT8 win (~32%), but the real INT8 HLSL path uses FP16 `dot2add` rather than INT8 `amd_mixed_dot`. This suggests the INT8 dot product unit on gfx1151 may not be the fastest path. ML2Code should benchmark `dot2add` vs `amd_mixed_dot` vs scalar INT8 for the actual Conv2D operators on RDNA3.5 to determine whether the current `dot2add` approach is already optimal or whether an INT8-native path could be faster.
+- **Scalar element-wise > packed `amd_mixed_dot`**: Our biggest INT8 win (~32%). The real INT8 HLSL is mixed: pass 0 uses `dot2add`, but passes 1-13 are mostly `dot4add_i8packed` (same instruction class as `amd_mixed_dot`). ML2Code should benchmark `dot4add_i8packed` vs scalar INT8 in the fused ConvNext/FasterNet operators on gfx1151; this is the highest-impact comparison for real FSR4 INT8 passes.
 - **LDS staging is slow on Strix Halo iGPU**: All four LDS variants we tested regressed (O10-O13), likely due to shared memory subsystem contention on iGPU. This is concerning for the FP8/WMMA path, which requires LDS staging (`groupshared uint inputLDS[]`) for wave matrix input loading. The WMMA path may underperform on iGPU vs dGPU for this reason.
 
 **Requires further investigation**:
-- **Thread block sizing**: Our harness found 256 threads (8 waves) optimal, but FSR4 shaders dispatch with `numthreads(32, 1, 1)` (single wave). The real shaders tile differently (one spatial position per thread, all features computed), so the occupancy tradeoffs are different. Worth profiling whether multi-wave dispatch could help for the larger residual block passes.
-- **14-pass dispatch overhead**: At ~5µs per INT8 kernel invocation, the 14-pass sequential pipeline has significant per-dispatch overhead relative to compute time on iGPU. Fusing adjacent passes or reducing pass count could improve end-to-end latency, but this requires ML2Code changes.
+- **Thread block sizing**: Our harness found 256 threads (8 waves) optimal, but real model shaders already use mixed multi-wave groups (`64x1x1` and `8x8x1`, plus `32x1x1` post passes). The tiling is different from the harness, so occupancy tradeoffs are not directly transferable. Worth profiling larger groups on selected bottleneck/fused passes.
+- **Dispatch overhead**: The INT8 pipeline is 14 model passes + 13 post passes (27 dispatches total). At ~5us-level kernel times in the harness, dispatch overhead can be material on iGPU. Fusing adjacent passes or reducing post-pass work could improve end-to-end latency, but this requires ML2Code changes.
 
 **Recommendations for RDNA3.5 optimization** (actionable for ML2Code / FSR4 shader development):
-- Benchmark the actual `int8_NHWC/Conv2D_k3p1b` operator with `dot2add` vs an `amd_mixed_dot` variant on gfx1151 -- our results suggest native INT8 dot products may not be optimal on this specific ISA
+- Benchmark fused INT8 operators (`ConvNextBlock`, `FasterNetBlock`, `FNB_CT2D_ADD`, `CNB_CT2D`) with `dot4add_i8packed` vs scalar INT8 variants on gfx1151 -- this targets passes 1-13 where most INT8 compute happens
 - Profile the FP8 WMMA path (`float8_NHWC/Conv2D_k2s2b`) on Strix Halo specifically -- LDS contention on iGPU may make WMMA less effective than on discrete RDNA3 GPUs like Navi 48
 - Validate that all ML2Code-generated code paths use store-time (not per-iteration) quantization
 - Consider `-O3` as the default compiler optimization level -- our testing found no benefit from `-O2` or `-Ofast/-ffast-math`, and `-O3` matched or beat all alternatives
-- Investigate pass fusion opportunities for the 14-pass pipeline, especially for the smaller residual block passes where dispatch overhead may dominate compute time on low-power iGPUs
+- Investigate pass/post-pass fusion opportunities for the 27-dispatch INT8 pipeline (14 model + 13 post), especially where dispatch overhead may dominate compute time on low-power iGPUs
 
 ## Before/After Performance (Main Summary)
 Comparison of the stable direct-TTY baseline vs the final selected defaults after the optimization loop.
