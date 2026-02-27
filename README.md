@@ -1,20 +1,62 @@
 # FSR4 RDNA3.5 Benchmark Summary
 
 ## Scope
-This repository currently benchmarks HIP microkernels that emulate FSR4-style INT8/FP8 compute behavior on Strix Halo (RDNA3.5, `gfx1151`).
 
-This is not a full DX12 frame-time benchmark of shipping FSR4.
+[AMD FidelityFX Super Resolution 4 (FSR4)](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) is AMD's ML-based upscaler that ships as quantized HLSL compute shaders generated from ONNX models via AMD's ML2Code toolchain. This repository benchmarks HIP microkernels that emulate FSR4-style INT8/FP8 compute behavior on Strix Halo (RDNA3.5, `gfx1151`), targeting the core dot-product and FMA operations that dominate the model's runtime.
+
+This is not a full DX12 frame-time benchmark of shipping FSR4 -- it isolates the low-level compute primitives to understand how RDNA3.5 handles the quantized arithmetic that FSR4 depends on.
+
+## FSR4 Model Overview
+
+FSR4 uses a **quantized CNN** with an encoder-bottleneck-decoder (U-Net style) architecture, compiled from ONNX to HLSL shaders via ML2Code. Key details:
+
+- **Model version**: v07 (from `fsr4_model_v07_*.onnx`)
+- **Architecture**: Encoder-decoder CNN with skip connections
+  - `encoder1`: Strided 2x2 convolution (DownscaleStridedConv2x2) for spatial downsampling
+  - `encoder2`: 2x residual blocks using depthwise separable convolutions (conv_dw + conv_pw_expand + conv_pw_contract)
+  - `encoder3`: 2x residual blocks with spatial mixing partial convolutions
+  - `bottleneck`: 2x residual blocks with spatial mixing + transposed 2x2 convolution (UpscaleConvTranspose2x2) for upsampling
+  - `decoder3`/`decoder2`/`decoder1`: Mirror the encoder stages, each with residual blocks and upscale convolutions
+  - Postprocessing: RCAS (Robust Contrast Adaptive Sharpening) and SPD (Single Pass Downsampler) with auto exposure
+- **Compute passes**: 14 sequential dispatch passes per frame (at 1080p), each with a pre/post quantization stage
+- **Scratch memory**: ~20 MB
+- **Weights**: ~88 KB per quality tier (quantized, stored as embedded dwords or `initializers.bin`)
+- **Input**: NHWC layout, 7 input channels (current + history frames), resolution-specific shaders for 1080p/2160p/4320p
+- **Quantization**: INT8 (fixed-point with learned scale/bias) or FP8 (e4m3 format); accumulation in FP32, quantized at store
+
+### Precision and Quality Variants
+
+FSR4 ships multiple precision/quality tradeoffs as separate shader sets:
+
+| Precision | Quality Modes |
+|---|---|
+| INT8 | balanced, quality, drs, native, performance, ultraperf |
+| FP8 (e4m3) | balanced, quality, drs, native, performance, ultraperf |
+
+Each variant also has WMMA-accelerated shaders (`pre_wmma.hlsl`, `post_wmma.hlsl`) for GPUs with Wave Matrix Multiply Accumulate support.
 
 ## RDNA3.5 Support Snapshot
+
+RDNA3.5 (gfx1151, Strix Halo) provides native hardware acceleration for the quantized operations FSR4 relies on. This repo exercises two key instruction paths:
+
 | Capability | Status In This Repo | Notes |
 |---|---|---|
-| INT8 dot compute | Benchmarked | INT8 kernels run on `gfx1151` (`amd_mixed_dot` and scalar INT8 paths). |
-| FP8 (`e4m3`) compute | Benchmarked | FP8 conversion/FMA microkernels run on `gfx1151` (`hip_fp8`). |
-| WMMA path | Present in FSR4 source, not benchmarked by this HIP harness | FSR4 source contains WMMA shader files (`pre_wmma.hlsl`, `post_wmma.hlsl`). |
-| Wave size | Verified | Harness reports `warpSize=32` on this device. |
+| INT8 dot compute | Benchmarked | Uses `amd_mixed_dot` (packed 4-element INT8 dot product) and scalar INT8 paths. Scalar path outperformed packed by ~32%. |
+| FP8 (`e4m3`) compute | Benchmarked | Uses `hip_fp8` library for native FP8 conversion + FMA. Accumulates in FP32, quantizes once at store. |
+| WMMA path | Present in FSR4 source, not benchmarked | FSR4 source contains WMMA shader files for wave-level matrix ops. Outside scope of HIP microkernel harness. |
+| Wave size | Verified | `warpSize=32` confirmed on gfx1151. All kernels dispatch 256 threads (8 waves per threadgroup). |
 
 RDNA3.5 ISA reference (online):
 - https://github.com/woct0rdho/rdna35-isa-markdown
+
+### What We Benchmark
+
+The HIP kernels emulate the core compute loop of FSR4's quantized convolution passes:
+
+- **INT8 path**: Dot-product accumulation of quantized activations and weights, with learned scale/bias dequantization. Tests both `amd_mixed_dot` (packed 4-element dot in one instruction) and scalar element-wise multiply-accumulate.
+- **FP8 path**: FMA (fused multiply-accumulate) using `hip_fp8` e4m3 format with FP32 accumulation. Tests conversion overhead and arithmetic throughput.
+
+Both paths use compile-time unrolled inner loops with configurable iteration depth, operating on 262,144 logical vectors per dispatch.
 
 ## Before/After Performance (Main Summary)
 Comparison of the stable direct-TTY baseline vs the final selected defaults after the optimization loop.
@@ -27,6 +69,8 @@ Comparison of the stable direct-TTY baseline vs the final selected defaults afte
 | INT8 | 0.007743 | 0.005376 | 30.57% faster |
 | FP8 | 0.117392 | 0.019868 | 83.08% faster |
 
+The biggest wins came from switching INT8 I/O from packed to scalar element-wise access (~32% gain) and from loop unrolling + requantization policy fixes that dramatically improved FP8 (~83% gain). Variance also dropped significantly (INT8 cv: 1.24% -> 0.70%, FP8 cv: 1.28% -> 0.58%), meaning the optimized kernels are both faster and more predictable.
+
 ## INT8 vs FP8 Relative Performance
 Lower time is better. `FP8/INT8` > 1.0 means INT8 is faster.
 
@@ -36,8 +80,8 @@ Lower time is better. `FP8/INT8` > 1.0 means INT8 is faster.
 | After | 0.005376 | 0.019868 | 3.70x | 269.57% |
 
 Summary:
-- INT8 remains faster than FP8 in this harness.
-- The INT8-vs-FP8 gap narrowed significantly (about `4.10x` narrower ratio vs before), mostly because FP8 improved a lot in the updated harness path.
+- INT8 remains faster than FP8 in this harness, consistent with INT8 using simpler integer ALU vs FP8's conversion overhead.
+- The INT8-vs-FP8 gap narrowed significantly (about `4.10x` narrower ratio vs before), mostly because FP8 improved a lot in the updated harness path. The initial FP8 implementation had a catastrophic per-iteration requantization policy that was 5x slower than necessary.
 
 ## Benchmark Methodology
 ### Protocol
@@ -47,9 +91,13 @@ Summary:
 - Stats collected: `mean`, `stddev`, `median`, `p95`, `cv_pct`, run count.
 - Keep/drop gate uses classification from `--reference-stats` with uncertainty fallback (`min_uncertainty_pct=3`, `cv_scale=0.5`).
 
-### Jitter Notes
-- Direct TTY control runs were very stable (`cv < 1%` for the selected control).
-- Under interactive/system load, several FP8 variants showed high variance (`cv` often `25-60%`), and those were marked `Unsure` unless clearly outside uncertainty bounds.
+### Jitter and Stability
+
+Benchmark jitter is a first-class concern for microkernel timing at the microsecond scale. GPU scheduling noise, power management, and system load can easily dominate the signal.
+
+- **Direct TTY control runs** (no desktop compositor/session) were very stable with cv < 1% for the final defaults. This is the authoritative measurement environment.
+- **Under interactive/system load**, several FP8 variants showed high variance (cv often 25-60%). These were marked `Unsure` unless clearly outside uncertainty bounds. This reflects real iGPU contention -- the Strix Halo shares its memory subsystem with the CPU, so background activity directly impacts kernel latency.
+- **Decision gate**: Only optimizations showing improvement outside a `min_uncertainty_pct=3%` / `cv_scale=0.5` envelope were accepted. This conservative gate means we likely left some marginal gains on the table, but avoids false positives from noise.
 
 ### Environment Snapshot
 | Item | Value |
@@ -62,6 +110,9 @@ Summary:
 | Kernel | `6.19.0-rc6-1-mainline` |
 
 ## Optimization Attempts (Single-Glance)
+
+20 optimization attempts were evaluated systematically: 5 kept, 11 rejected, 4 uncertain (conservative defaults retained). Key takeaways: scalar INT8 I/O and compile-time loop unrolling were the biggest wins; LDS staging strategies all regressed despite theoretical benefits (likely due to memory subsystem contention on iGPU); compiler flag tuning showed negligible impact within the noise floor.
+
 Notes:
 - `O02-O06` were measured in the earlier direct-TTY phase.
 - `O07-O19` were measured against phase-2 control `results/baseline-benchmark-20260227-052146.json`.
@@ -99,12 +150,12 @@ Notes:
 ### Repository Layout
 ```text
 .
-├── benchmarks/                  # HIP benchmark kernels
-├── baseline-benchmark.py        # Benchmark harness (build/run/classify)
+├── benchmarks/                  # HIP benchmark kernels (baseline_kernels_bench.cpp)
+├── baseline-benchmark.py        # Python benchmark harness (build/run/classify)
 ├── fsr4-src/
-│   ├── baseline/                # Immutable FSR4 source snapshot
+│   ├── baseline/                # Immutable FSR4 source snapshot (HLSL shaders + weights)
 │   └── opt/                     # Optimization workspace
-├── results/                     # Benchmark JSON outputs and latest symlike files
+├── results/                     # Benchmark JSON outputs and latest symlink files
 ├── reference/                   # External reference material/checkouts
 ├── AGENTS.md                    # Environment + workflow instructions
 ├── README.md                    # Single-glance project summary (this file)
@@ -117,11 +168,10 @@ Notes:
 ```
 
 ### Key Docs
-- [README.md](/home/lhl/github/lhl/fsr4-rdna3/README.md)
-- [ANALYSIS.md](/home/lhl/github/lhl/fsr4-rdna3/ANALYSIS.md)
-- [AGENTS.md](/home/lhl/github/lhl/fsr4-rdna3/AGENTS.md)
-- [WORKLOG.md](/home/lhl/github/lhl/fsr4-rdna3/WORKLOG.md)
-- [IMPLEMENTATION.md](/home/lhl/github/lhl/fsr4-rdna3/IMPLEMENTATION.md)
-- [OPTIMIZATION_RESULTS.md](/home/lhl/github/lhl/fsr4-rdna3/OPTIMIZATION_RESULTS.md)
-- [OPTIMIZATION_QUEUE.md](/home/lhl/github/lhl/fsr4-rdna3/OPTIMIZATION_QUEUE.md)
-- [TODO.md](/home/lhl/github/lhl/fsr4-rdna3/TODO.md)
+- [ANALYSIS.md](ANALYSIS.md)
+- [AGENTS.md](AGENTS.md)
+- [WORKLOG.md](WORKLOG.md)
+- [IMPLEMENTATION.md](IMPLEMENTATION.md)
+- [OPTIMIZATION_RESULTS.md](OPTIMIZATION_RESULTS.md)
+- [OPTIMIZATION_QUEUE.md](OPTIMIZATION_QUEUE.md)
+- [TODO.md](TODO.md)
