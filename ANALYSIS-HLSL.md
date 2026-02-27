@@ -4,7 +4,7 @@
 
 This document analyzes the actual FSR4 INT8 HLSL shader implementation, compares it to our HIP microkernel harness, and estimates where our optimization findings could (and could not) apply to the real codebase.
 
-**Key takeaway**: The FSR4 INT8 path uses two distinct dot-product strategies depending on the operator. Pass 0 (the input downscale) uses FP16 `dot2add`, but the majority of the network (passes 1-12) uses **native INT8 `dot4add_i8packed`**, which is much closer to what our HIP harness benchmarks. Our findings are more applicable than they first appeared.
+**Key takeaway**: The FSR4 INT8 path uses two distinct dot-product strategies depending on the operator. Pass 0 (the input downscale) uses FP16 `dot2add`, while passes 1-13 are dominated by **native INT8 `dot4add_i8packed`** (including pass 13's `CNB_CT2D` compute path before FP16 writeback). This is much closer to what our HIP harness benchmarks.
 
 ## FP8 vs INT8: Why We Focus on INT8
 
@@ -12,7 +12,7 @@ This document analyzes the actual FSR4 INT8 HLSL shader implementation, compares
 |---|---|---|
 | HIP harness speed | 0.005376 ms | 0.019868 ms |
 | Ratio | 1.0x (baseline) | 3.7x slower |
-| Real HLSL approach | `dot4add_i8packed` + `dot2add` (per-thread scalar) | `AmdWaveMatrixMultiply` (WMMA, wave-level matrix ops) |
+| Real HLSL approach | Mostly `dot4add_i8packed` + boundary `dot2add` | `AmdWaveMatrixMultiply` (WMMA, wave-level matrix ops) |
 | WMMA required? | No | **Yes** -- FP8 HLSL has `#error` without `WMMA_ENABLED=1` |
 | LDS required? | No | **Yes** -- `groupshared uint inputLDS[]` for wave matrix input staging |
 | Our harness relevance | High -- same instruction class | Low -- completely different compute model |
@@ -27,7 +27,7 @@ In the `i8_balanced` model, `WMMA_ENABLED` is set to `0` and `DOT4_ENABLED` is s
 
 ## The INT8 Execution Pipeline (1080p, Balanced)
 
-The model executes 14 sequential compute passes (0-13), each followed by a padding reset post-pass. The pipeline forms a U-Net: encoder downsamples spatially while increasing channels, bottleneck processes at lowest resolution, decoder upsamples back.
+The model executes 14 sequential compute passes (0-13). Passes 0-12 are followed by padding reset post-passes; pass 13 has no post-pass. The pipeline forms a U-Net: encoder downsamples spatially while increasing channels, bottleneck processes at lowest resolution, decoder upsamples back.
 
 Source: `fsr4-src/baseline/internal/shaders/fsr4_model_v07_i8_balanced/passes_1080.hlsl`
 
@@ -46,7 +46,7 @@ Source: `fsr4-src/baseline/internal/shaders/fsr4_model_v07_i8_balanced/passes_10
 | 10 | decoder3 ResBlock_1 | `FasterNetBlock<32,1>` | 480x270 | 32 -> 32 | (64,1,1) | `dot4add_i8packed` | 3430 |
 | 11 | decoder3 ResBlock_2 + upscale + skip-add | `FNB_CT2D_ADD<32,1>` | 480x270 -> 960x540 | 32 -> 16 | (64,1,1) | `dot4add_i8packed` | 4136 |
 | 12 | decoder2 ResBlock | `ConvNextBlock` | 960x540 | 16 -> 16 | (64,1,1) | `dot4add_i8packed` | 4548 |
-| 13 | decoder2 upscale (FP16 output) | `CNB_CT2D` (float16) | 960x540 -> 1920x1080 | 16 -> 8 | (8,8,1) | `dot2add` (FP16) | 4962 |
+| 13 | decoder2 upscale (FP16 output) | `CNB_CT2D` (float16 output) | 960x540 -> 1920x1080 | 16 -> 8 | (8,8,1) | `dot4add_i8packed` (INT8 internal compute) | 4962 |
 
 **Spatial progression**: 1920x1080 -> 960x540 -> 480x270 -> 240x135 -> 480x270 -> 960x540 -> 1920x1080
 
@@ -54,9 +54,9 @@ Source: `fsr4-src/baseline/internal/shaders/fsr4_model_v07_i8_balanced/passes_10
 
 ## The Two Dot-Product Paths
 
-### Path A: FP16 `dot2add` (Pass 0 and Pass 13 only)
+### Path A: FP16 `dot2add` (Pass 0 boundary pass)
 
-Used for the first and last passes where data crosses the FP16/INT8 boundary.
+Used for the entry pass where FP16 frame input is quantized into INT8 activations.
 
 **Source**: `int8_NHWC/Conv2D_k2s2b.hlsli:60-65` (specialized `Conv_8_16_k2s2b`)
 
@@ -77,11 +77,11 @@ storageBytes.x = pack_clamp_s8(quantized_vs);
 
 **Data flow**: FP16 input -> `Unpack4h` -> `dot2add(half2, half2, float)` -> FP32 accumulator -> `round(x * rcpScale)` -> `pack_clamp_s8` -> INT8 output
 
-**Why FP16**: The input tensor is FP16 (the raw frame data). Pass 0 converts from FP16 to INT8. Pass 13 converts back from INT8 to FP16 for final output. These boundary passes have no INT8 input to dot-product with.
+**Why FP16**: The input tensor is FP16 (the raw frame data). Pass 0 converts from FP16 to INT8, so it cannot use an INT8xINT8 dot path at input.
 
-### Path B: Native INT8 `dot4add_i8packed` (Passes 1-12)
+### Path B: Native INT8 `dot4add_i8packed` (Passes 1-13)
 
-Used for all internal network passes. This is the **dominant compute pattern**.
+Used for the internal network passes and also pass 13's fused CNB+CT2D compute stages. This is the **dominant compute pattern**.
 
 **Source**: `int8_NHWC/Fused/ConvNextBlock.hlsli:95-98` (representative example)
 
@@ -108,22 +108,23 @@ storeDwords[f/4] = pack_clamp_s8(result);
 
 **Data flow**: INT8 packed input -> `dot4add_i8packed(uint, uint, int)` -> INT32 accumulator -> float scale multiply -> `round()` -> `pack_clamp_s8` -> INT8 output
 
-**Critical observation**: `dot4add_i8packed` is the HLSL equivalent of our HIP `amd_mixed_dot` -- both perform a packed 4-element INT8 dot product with INT32 accumulation. This is the same instruction class we benchmarked, and it dominates 12 of 14 passes.
+**Critical observation**: `dot4add_i8packed` is the HLSL equivalent of our HIP `amd_mixed_dot` -- both perform a packed 4-element INT8 dot product with INT32 accumulation. This is the same instruction class we benchmarked, and it dominates 13 of 14 passes.
 
 ### Instruction Mapping: HIP vs HLSL
 
 | HIP Harness | HLSL Equivalent | Used In |
 |---|---|---|
-| `amd_mixed_dot(char4, char4, int32_t, false)` | `dot4add_i8packed(uint, uint, int)` | Passes 1-12 (internal network) |
+| `amd_mixed_dot(char4, char4, int32_t, false)` | `dot4add_i8packed(uint, uint, int)` | Passes 1-13 (dominant INT8 compute path) |
 | Scalar `acc += av0*bv0 + av1*bv1 + av2*bv2 + av3*bv3` | No HLSL equivalent used | N/A (our optimization) |
-| N/A | `dot2add(half2, half2, float)` | Passes 0 and 13 (FP16 boundary) |
+| N/A | `dot2add(half2, half2, float)` | Pass 0 (FP16 input quantization) |
 
 **Key source files for Path B operators**:
-- `int8_NHWC/Fused/ConvNextBlock.hlsli` -- 3x3 DW conv + 1x1 PW expand + 1x1 PW contract, all `dot4add_i8packed`
+- `int8_NHWC/Fused/ConvNextBlock.hlsli` -- 3x3 spatial stage + 1x1 PW expand + 1x1 PW contract, all `dot4add_i8packed`
 - `int8_NHWC/Fused/FasterNetBlock.hlsli` -- Same as ConvNextBlock but with grouped convolution and activation fusion
 - `int8_NHWC/Fused/FusedConv2D_k2s2b_QuantizedOutput.hlsli` -- Strided 2x2 downscale, `dot4add_i8packed`
 - `int8_NHWC/Fused/FNB_CT2D_ADD.hlsli` -- FasterNetBlock + ConvTranspose2D upscale + skip-connection add
-- `int8_NHWC/Conv2D.hlsli:279-331` -- Generic quantized INT8 Conv2D using `dot4add_i8packed` via template
+- `float16_NHWC/Fused/CNB_CT2D.hlsli` -- Pass 13 fused CNB + CT2D path, `dot4add_i8packed` internal compute
+- `int8_NHWC/Conv2D.hlsli:279-331` -- Generic quantized INT8 Conv2D template path (uses `dot4add_i8packed` when selected)
 
 ## Operator-by-Operator Analysis
 
@@ -132,12 +133,12 @@ storeDwords[f/4] = pack_clamp_s8(result);
 **Source**: `int8_NHWC/Fused/ConvNextBlock.hlsli`
 
 Fuses three convolutions into a single dispatch:
-1. **3x3 depthwise spatial conv** (weights0) -- `dot4add_i8packed`, lines 86-99
+1. **3x3 spatial conv stage** (weights0) -- `dot4add_i8packed`, lines 86-99
 2. **1x1 pointwise expand** (weights1) -- `dot4add_i8packed`, lines 107-119 (after quantize+ReLU)
 3. **1x1 pointwise contract** (weights2) -- `dot4add_i8packed`, lines 130-143 (after quantize+ReLU)
 4. **Residual add** -- with skip connection input
 
-**Inner loop structure** (3x3 DW conv, `ConvNextBlock.hlsli:64-99`):
+**Inner loop structure** (3x3 spatial stage, `ConvNextBlock.hlsli:64-99`):
 ```
 [unroll] for ky in 0..2:          // kernel height
   [unroll] for kx in 0..2:        // kernel width
@@ -148,7 +149,7 @@ Fuses three convolutions into a single dispatch:
         4x dot4add_i8packed       // 16 INT8 MACs per feature
 ```
 
-Each `dot4add_i8packed` processes 4 INT8 multiplies + 1 INT32 accumulate. With 16 input channels loaded per spatial position and 16 features, this is 16 * 9 * 16 = 2,304 INT8 MACs per output pixel (for the DW conv alone).
+Each `dot4add_i8packed` processes 4 INT8 multiplies + 1 INT32 accumulate. With 16 input channels loaded per spatial position and 16 features, this is 16 * 9 * 16 = 2,304 INT8 MACs per output pixel for this stage.
 
 **Quantization between fused ops** (`ConvNextBlock.hlsli:101-106`):
 ```hlsl
@@ -168,7 +169,7 @@ Similar to ConvNextBlock but with a split-channel (grouped) convolution structur
 - `FasterNetBlock<32, 1>` for 32-channel layers (passes 4, 5, 10)
 - `FasterNetBlock<64, 2>` for 64-channel layers with groups=2 (passes 7, 8)
 
-**First convolution** (3x3 depthwise, `FasterNetBlock.hlsli:82-117`):
+**First convolution** (3x3 grouped spatial conv, `FasterNetBlock.hlsli:82-117`):
 ```hlsl
 // Preload input channels
 int preloadedInputs[numFeatures/4/2];  // Pre-staged in registers
@@ -216,7 +217,7 @@ int accumulator[32];                               // 32 INT32 accumulators
 The most complex fused operator: FasterNetBlock + ConvTranspose2D (upscale) + skip-connection Add, all in one dispatch. This bridges between resolution levels in the decoder.
 
 **Operations fused**:
-1. 3x3 DW conv (dot4add_i8packed)
+1. 3x3 grouped spatial conv (dot4add_i8packed)
 2. Quantize + ReLU
 3. 1x1 PW expand (dot4add_i8packed)
 4. Quantize + ReLU
@@ -245,7 +246,7 @@ The entry convolution that converts FP16 input to INT8. Uses `dot2add` because i
 - `Conv_10_16_k2s2b` (line 184): For 10-channel input
 - Generic fallback via `TemplatedConv2D_3413_NHWC_44` (line 360)
 
-### Conv2D generic (Passes 1-12, via template)
+### Conv2D generic (Template path, not used by generated i8 balanced passes 1-13)
 
 **Source**: `int8_NHWC/Conv2D.hlsli:279-331`
 
@@ -255,7 +256,7 @@ int Dot(int8_t4_packed _ws, int8_t4_packed _vs, int acc) {
     return dot4add_i8packed(_ws, _vs, acc);
 }
 ```
-This feeds into `TemplatedConv2D_3413_NHWC_44` (`templates/Conv2D.hlsli:108-155`) which has the standard spatial tiling + feature loop with `[unroll]` on all dimensions.
+This feeds into `TemplatedConv2D_3413_NHWC_44` (`templates/Conv2D.hlsli:108-155`) which has the standard spatial tiling + feature loop with `[unroll]` on all dimensions. In this specific generated `passes_1080.hlsl`, passes 1-13 use fused operators instead of this generic Conv2D template.
 
 ## Applying Our Optimization Findings
 
@@ -263,9 +264,9 @@ This feeds into `TemplatedConv2D_3413_NHWC_44` (`templates/Conv2D.hlsli:108-155`
 
 **Our finding**: Scalar element-wise multiply-accumulate outperformed `amd_mixed_dot` (the packed INT8 dot) by ~32% on gfx1151.
 
-**HLSL relevance**: **HIGH for passes 1-12**. The real HLSL uses `dot4add_i8packed`, which maps to the same hardware instruction as `amd_mixed_dot`. If scalar element-wise is genuinely faster on gfx1151, then there may be an optimization opportunity for the ML2Code code generator to emit scalar INT8 multiplies instead of packed dot products.
+**HLSL relevance**: **HIGH for passes 1-13**. The real HLSL uses `dot4add_i8packed`, which maps to the same hardware instruction as `amd_mixed_dot`. If scalar element-wise is genuinely faster on gfx1151, then there may be an optimization opportunity for the ML2Code code generator to emit scalar INT8 multiplies instead of packed dot products.
 
-**Potential impact**: Passes 1-12 account for 12 of 14 passes and contain the vast majority of compute. If the 32% scalar advantage holds for the actual convolution workload (not just our synthetic loop), this would be a significant improvement across the entire network.
+**Potential impact**: Passes 1-13 account for 13 of 14 passes and contain the vast majority of compute. If the 32% scalar advantage holds for the actual convolution workload (not just our synthetic loop), this would be a significant improvement across the entire network.
 
 **Caveats**:
 - Our harness loop is simpler (single inner loop, flat arrays). The real HLSL has nested spatial + feature loops with memory access patterns that may affect instruction scheduling differently.
@@ -302,11 +303,10 @@ for (uint ky = 0; ky < weights0.logicalSize.y; ++ky)   // NOT [unroll]
 ```
 The compiler may or may not unroll these since `weights0.logicalSize` is a runtime value (set from tensor metadata). If it doesn't unroll, this could be leaving performance on the table.
 
-**How to test**: Add `[unroll]` to the DW conv loop in FasterNetBlock and benchmark. If kernel dimensions are always 3x3 (they are for this model), the loop count is always known and unrolling is safe.
+**How to test**: Add `[unroll]` to the first-conv spatial loop in FasterNetBlock and benchmark. If kernel dimensions are always 3x3 (they are for this model), the loop count is always known and unrolling is safe.
 
 **Relevant files**:
-- `int8_NHWC/Fused/FasterNetBlock.hlsli:91-92` -- missing `[unroll]` on DW conv spatial loops
-- `int8_NHWC/Fused/ConvNextBlock.hlsli:66-68` -- missing `[unroll]` on outer DW conv loops (inner loops have it)
+- `int8_NHWC/Fused/FasterNetBlock.hlsli:91-92` -- missing `[unroll]` on first conv spatial loops
 
 ### O08: Store-Time Quantization (per-iter requant = +194% INT8 regression)
 
@@ -400,20 +400,39 @@ For `FasterNetBlock<64, 2>` (passes 7, 8), this is 32 + 16 + 64 = 112 registers 
 
 | Optimization | Applicable? | Passes Affected | Estimated Real Impact | Confidence |
 |---|---|---|---|---|
-| O06: Scalar > packed INT8 | Yes | 1-12 (85% of pipeline) | Up to ~32% on dot-product-bound passes | Medium -- needs DXC codegen validation |
-| O05: Loop unrolling | Partially -- some loops missing `[unroll]` | 1-12 (FasterNetBlock DW loops) | ~5-12% on affected passes | High -- well-understood optimization |
+| O06: Scalar > packed INT8 | Yes | 1-13 (~93% of pipeline) | Likely ~5-15% per-pass; stretch ~20-25%; hard upper bound ~32% | Medium -- needs DXC codegen validation |
+| O05: Loop unrolling | Partially -- some loops missing `[unroll]` | 4, 5, 7, 8, 10 (FasterNetBlock first conv loops) | ~5-12% on affected passes | High -- well-understood optimization |
 | O08: Store-time quant | Already correct | N/A | N/A (would be catastrophic if violated) | High |
 | O10-O13: Avoid LDS staging | INT8 already avoids LDS | N/A for INT8 | Validates current register-based approach | High |
 | O09: Interior/edge split | Applicable to fused ops | 1, 2, 4, 5, 7, 8, 10, 12 | ~1-3% (branch removal in hot loop) | Low-Medium |
-| O02: Thread block sizing | Testable | 1-12 | Unknown -- different work distribution | Low |
+| O02: Thread block sizing | Testable | Most internal passes | Unknown -- different work distribution | Low |
+
+## Expected Gain Ranges (gfx1151)
+
+Based on the microbenchmarks and the HLSL pass mapping:
+
+- **Instruction-level upper bound**: ~32% on kernels where packed INT8 dot math dominates and scalarized replacements compile efficiently.
+- **Most likely early result in real HLSL dispatches**: **~5-15%** on affected passes after first scalar-vs-packed A/B.
+- **Stretch target** (if DXC codegen, VGPR pressure, and occupancy all cooperate): **~20-25%** on key passes.
+
+Why expected real gains are lower than the microbenchmark peak:
+
+- The microbenchmark isolates inner math, while real HLSL includes tensor loads/stores, boundary checks, quantization, and fused epilog/prolog work.
+- Scalar replacements may increase unpacking overhead and register pressure, which can reduce occupancy and hide less latency.
+- Compiler behavior (DXC ISA generation) can materially change outcomes even when the source-level operation appears equivalent.
+
+Frame-level implication:
+
+- If FSR4 consumes fraction `S` of frame time, and FSR4 stage speedup is `G`, approximate frame uplift is `S * G`.
+- Example: if FSR4 is 40% of frame time and FSR4 stage speedup is 10%, frame uplift is about 4%.
 
 ## Priority Recommendations
 
-1. **Benchmark scalar vs `dot4add_i8packed` in DXC-compiled shaders on gfx1151**. This is the highest-impact finding. Modify `ConvNextBlock.hlsli` to use unpacked scalar INT8 multiply-accumulate and compare dispatch times. If the 32% advantage holds, it applies to 12 of 14 passes.
+1. **Benchmark scalar vs `dot4add_i8packed` in DXC-compiled shaders on gfx1151**. This is the highest-impact finding. Modify `ConvNextBlock.hlsli` to use unpacked scalar INT8 multiply-accumulate and compare dispatch times. If the 32% advantage holds, it applies to 13 of 14 passes.
 
-2. **Add `[unroll]` to DW conv spatial loops in FasterNetBlock**. The outer `for ky/kx` loops at `FasterNetBlock.hlsli:91-92` lack `[unroll]` annotations. Since kernel dimensions are always 3x3 for this model, this is a safe, low-risk optimization that could yield ~5-12% on passes 4, 5, 7, 8, 10.
+2. **Add `[unroll]` to first-conv spatial loops in FasterNetBlock**. The outer `for ky/kx` loops at `FasterNetBlock.hlsli:91-92` lack `[unroll]` annotations. Since kernel dimensions are always 3x3 for this model, this is a safe, low-risk optimization that could yield ~5-12% on passes 4, 5, 7, 8, 10.
 
-3. **Profile per-pass dispatch time on Strix Halo**. With 14 sequential dispatches + 14 padding post-passes = 28 total dispatches per frame, the dispatch overhead may be significant relative to compute time on iGPU. Our harness measured ~5µs per INT8 kernel invocation; 28 dispatches at ~5µs each = ~140µs of dispatch overhead alone.
+3. **Profile per-pass dispatch time on Strix Halo**. With 14 sequential dispatches + 13 padding post-passes = 27 total dispatches per frame, the dispatch overhead may be significant relative to compute time on iGPU. Our harness measured ~5us per INT8 kernel invocation; 27 dispatches at ~5us each = ~135us of dispatch overhead alone.
 
 4. **Test larger thread group sizes for bottleneck passes**. Passes 7-8 operate on 240x135 spatial dims with 64 channels. With `numthreads(64,1,1)`, occupancy may be low. Testing `numthreads(128,1,1)` or `numthreads(256,1,1)` could improve occupancy on gfx1151's wave32 architecture.
 
@@ -437,7 +456,7 @@ For `FasterNetBlock<64, 2>` (passes 7, 8), this is 32 + 16 + 64 = 112 registers 
 - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Pad.hlsli` -- Constant padding
 
 ### INT8 Fused Operators
-- `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/ConvNextBlock.hlsli` -- DW conv + PW expand + PW contract + residual add
+- `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/ConvNextBlock.hlsli` -- 3x3 spatial stage + PW expand + PW contract + residual add
 - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/FasterNetBlock.hlsli` -- Grouped ConvNextBlock variant
 - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/FNB_CT2D_ADD.hlsli` -- FasterNetBlock + upscale + skip-add
 - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/FusedConv2D_k2s2b_QuantizedOutput.hlsli` -- Strided downscale + fused quant output
