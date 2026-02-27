@@ -1,0 +1,157 @@
+{
+  "schema_version": 2,
+  "timestamp_utc": "2026-02-26T19:07:56.822194+00:00",
+  "config": {
+    "mode": "both",
+    "arch": "gfx1151",
+    "elements": 262144,
+    "threads": 256,
+    "inner_int8": 16,
+    "inner_fp8": 16,
+    "warmup_runs": 40,
+    "min_runs": 200,
+    "max_runs": 200000,
+    "reps_per_run": 200,
+    "target_seconds": 60.0,
+    "trials": 1,
+    "seed": 1337
+  },
+  "trials": [
+    {
+      "trial": 1,
+      "seed": 1337,
+      "command": [
+        "/home/lhl/github/lhl/fsr4-rdna3/build/baseline_kernels_bench",
+        "--mode",
+        "both",
+        "--elements",
+        "262144",
+        "--threads",
+        "256",
+        "--inner-int8",
+        "16",
+        "--inner-fp8",
+        "16",
+        "--warmup-runs",
+        "40",
+        "--min-runs",
+        "200",
+        "--max-runs",
+        "200000",
+        "--reps-per-run",
+        "200",
+        "--target-seconds",
+        "60.0",
+        "--seed",
+        "1337"
+      ],
+      "info": {
+        "mode": "both",
+        "device": "0",
+        "name": "Radeon",
+        "gcnArchName": "gfx1151",
+        "elements": "262144",
+        "threads": "256",
+        "warmup_runs": "40",
+        "min_runs": "200",
+        "max_runs": "200000",
+        "reps_per_run": "200",
+        "target_seconds": "60",
+        "inner_int8": "16",
+        "inner_fp8": "16"
+      },
+      "results": [
+        {
+          "mode": "int8",
+          "runs": 38233.0,
+          "elapsed_s": 60.000981,
+          "mean_ms": 0.007743,
+          "stddev_ms": 9.6e-05,
+          "median_ms": 0.007754,
+          "p95_ms": 0.007888,
+          "min_ms": 0.007489,
+          "max_ms": 0.008464,
+          "cv_pct": 1.239097,
+          "checksum": 108224.0
+        },
+        {
+          "mode": "fp8",
+          "runs": 2554.0,
+          "elapsed_s": 60.018323,
+          "mean_ms": 0.117392,
+          "stddev_ms": 0.001498,
+          "median_ms": 0.117125,
+          "p95_ms": 0.120338,
+          "min_ms": 0.114019,
+          "max_ms": 0.12674,
+          "cv_pct": 1.275903,
+          "checksum": 6.25
+        }
+      ]
+    }
+  ],
+  "aggregate": [
+    {
+      "mode": "fp8",
+      "trials": 1,
+      "mean_of_mean_ms": 0.117392,
+      "stdev_of_mean_ms": 0.0,
+      "mean_of_median_ms": 0.117125,
+      "stdev_of_median_ms": 0.0,
+      "mean_of_p95_ms": 0.120338,
+      "stdev_of_p95_ms": 0.0,
+      "mean_cv_pct": 1.275903,
+      "mean_runs": 2554,
+      "total_runs": 2554,
+      "total_kernel_invocations": 510800,
+      "total_elapsed_s": 60.018323
+    },
+    {
+      "mode": "int8",
+      "trials": 1,
+      "mean_of_mean_ms": 0.007743,
+      "stdev_of_mean_ms": 0.0,
+      "mean_of_median_ms": 0.007754,
+      "stdev_of_median_ms": 0.0,
+      "mean_of_p95_ms": 0.007888,
+      "stdev_of_p95_ms": 0.0,
+      "mean_cv_pct": 1.239097,
+      "mean_runs": 38233,
+      "total_runs": 38233,
+      "total_kernel_invocations": 7646600,
+      "total_elapsed_s": 60.000981
+    }
+  ],
+  "mode_summary": {
+    "fp8": {
+      "mode": "fp8",
+      "trials": 1,
+      "mean_of_mean_ms": 0.117392,
+      "stdev_of_mean_ms": 0.0,
+      "mean_of_median_ms": 0.117125,
+      "stdev_of_median_ms": 0.0,
+      "mean_of_p95_ms": 0.120338,
+      "stdev_of_p95_ms": 0.0,
+      "mean_cv_pct": 1.275903,
+      "mean_runs": 2554,
+      "total_runs": 2554,
+      "total_kernel_invocations": 510800,
+      "total_elapsed_s": 60.018323
+    },
+    "int8": {
+      "mode": "int8",
+      "trials": 1,
+      "mean_of_mean_ms": 0.007743,
+      "stdev_of_mean_ms": 0.0,
+      "mean_of_median_ms": 0.007754,
+      "stdev_of_median_ms": 0.0,
+      "mean_of_p95_ms": 0.007888,
+      "stdev_of_p95_ms": 0.0,
+      "mean_cv_pct": 1.239097,
+      "mean_runs": 38233,
+      "total_runs": 38233,
+      "total_kernel_invocations": 7646600,
+      "total_elapsed_s": 60.000981
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "timestamp_utc": "2026-02-26T17:07:32.446806+00:00",
+  "command": [
+    "/home/lhl/github/lhl/fsr4-rdna3/build/baseline_kernels_bench",
+    "--mode",
+    "both",
+    "--elements",
+    "262144",
+    "--threads",
+    "256",
+    "--inner-int8",
+    "16",
+    "--inner-fp8",
+    "16",
+    "--warmup-runs",
+    "40",
+    "--min-runs",
+    "200",
+    "--max-runs",
+    "200000",
+    "--reps-per-run",
+    "200",
+    "--target-seconds",
+    "60.0",
+    "--seed",
+    "1337"
+  ],
+  "info": {
+    "mode": "both",
+    "device": "0",
+    "name": "Radeon",
+    "gcnArchName": "gfx1151",
+    "elements": "262144",
+    "threads": "256",
+    "warmup_runs": "40",
+    "min_runs": "200",
+    "max_runs": "200000",
+    "reps_per_run": "200",
+    "target_seconds": "60",
+    "inner_int8": "16",
+    "inner_fp8": "16"
+  },
+  "results": [
+    {
+      "mode": "int8",
+      "runs": 35180.0,
+      "elapsed_s": 60.000009,
+      "mean_ms": 0.008455,
+      "stddev_ms": 0.000783,
+      "median_ms": 0.008203,
+      "p95_ms": 0.010122,
+      "min_ms": 0.007657,
+      "max_ms": 0.031878,
+      "cv_pct": 9.264029,
+      "checksum": 108224.0
+    },
+    {
+      "mode": "fp8",
+      "runs": 2452.0,
+      "elapsed_s": 60.012638,
+      "mean_ms": 0.122223,
+      "stddev_ms": 0.008459,
+      "median_ms": 0.120998,
+      "p95_ms": 0.129231,
+      "min_ms": 0.115657,
+      "max_ms": 0.382679,
+      "cv_pct": 6.921006,
+      "checksum": 6.25
+    }
+  ]
+}

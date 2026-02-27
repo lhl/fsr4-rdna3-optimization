@@ -1,0 +1,58 @@
+{
+  "timestamp_utc": "2026-02-26T17:08:09.074179+00:00",
+  "command": [
+    "/home/lhl/github/lhl/fsr4-rdna3/build/baseline_kernels_bench",
+    "--mode",
+    "int8",
+    "--elements",
+    "262144",
+    "--threads",
+    "256",
+    "--inner-int8",
+    "16",
+    "--inner-fp8",
+    "64",
+    "--warmup-runs",
+    "40",
+    "--min-runs",
+    "100",
+    "--max-runs",
+    "200000",
+    "--reps-per-run",
+    "2000",
+    "--target-seconds",
+    "20.0",
+    "--seed",
+    "1337"
+  ],
+  "info": {
+    "mode": "int8",
+    "device": "0",
+    "name": "Radeon",
+    "gcnArchName": "gfx1151",
+    "elements": "262144",
+    "threads": "256",
+    "warmup_runs": "40",
+    "min_runs": "100",
+    "max_runs": "200000",
+    "reps_per_run": "2000",
+    "target_seconds": "20",
+    "inner_int8": "16",
+    "inner_fp8": "64"
+  },
+  "results": [
+    {
+      "mode": "int8",
+      "runs": 1071.0,
+      "elapsed_s": 20.01668,
+      "mean_ms": 0.009332,
+      "stddev_ms": 0.003208,
+      "median_ms": 0.008714,
+      "p95_ms": 0.009983,
+      "min_ms": 0.007853,
+      "max_ms": 0.055625,
+      "cv_pct": 34.377564,
+      "checksum": 108224.0
+    }
+  ]
+}

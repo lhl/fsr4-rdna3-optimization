@@ -1,0 +1,37 @@
+{
+  "overall": "unsure",
+  "metric": "median",
+  "min_uncertainty_pct": 3.0,
+  "cv_scale": 0.5,
+  "per_mode": [
+    {
+      "mode": "fp8",
+      "metric": "median",
+      "reference_ms": 0.017301499999999997,
+      "current_ms": 0.017502999999999998,
+      "delta_ms": -0.0002015000000000003,
+      "delta_pct": -1.1646389041412613,
+      "uncertainty_ms": 0.0010212263030298435,
+      "uncertainty_pct": 5.90253043394991,
+      "verdict": "unsure",
+      "reference_trials": 2,
+      "current_trials": 2
+    },
+    {
+      "mode": "int8",
+      "metric": "median",
+      "reference_ms": 0.0031149999999999997,
+      "current_ms": 0.00315,
+      "delta_ms": -3.500000000000031e-05,
+      "delta_pct": -1.1235955056179876,
+      "uncertainty_ms": 0.00020617299532188995,
+      "uncertainty_pct": 6.618715740670625,
+      "verdict": "unsure",
+      "reference_trials": 2,
+      "current_trials": 2
+    }
+  ],
+  "timestamp_utc": "2026-02-26T17:45:41.889991+00:00",
+  "reference_stats": "/home/lhl/github/lhl/fsr4-rdna3/results/test-reference.json",
+  "current_stats": "/home/lhl/github/lhl/fsr4-rdna3/results/test-current.json"
+}

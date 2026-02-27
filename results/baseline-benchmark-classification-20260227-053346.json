@@ -1,0 +1,37 @@
+{
+  "overall": "unsure",
+  "metric": "median",
+  "min_uncertainty_pct": 3.0,
+  "cv_scale": 0.5,
+  "per_mode": [
+    {
+      "mode": "fp8",
+      "metric": "median",
+      "reference_ms": 0.01986,
+      "current_ms": 0.01981,
+      "delta_ms": 4.999999999999796e-05,
+      "delta_pct": 0.2517623363544711,
+      "uncertainty_ms": 0.004810094184599999,
+      "uncertainty_pct": 24.220011,
+      "verdict": "unsure",
+      "reference_trials": 1,
+      "current_trials": 1
+    },
+    {
+      "mode": "int8",
+      "metric": "median",
+      "reference_ms": 0.005371,
+      "current_ms": 0.005363,
+      "delta_ms": 8.000000000000194e-06,
+      "delta_pct": 0.14894805436604347,
+      "uncertainty_ms": 0.00016113,
+      "uncertainty_pct": 3.0,
+      "verdict": "unsure",
+      "reference_trials": 1,
+      "current_trials": 1
+    }
+  ],
+  "timestamp_utc": "2026-02-26T20:33:46.034124+00:00",
+  "reference_stats": "/home/lhl/github/lhl/fsr4-rdna3/results/baseline-benchmark-20260227-052146.json",
+  "current_stats": "/home/lhl/github/lhl/fsr4-rdna3/results/baseline-benchmark-20260227-053346.json"
+}
