@@ -212,3 +212,154 @@ Notes:
 - [OPTIMIZATION_RESULTS.md](OPTIMIZATION_RESULTS.md)
 - [OPTIMIZATION_QUEUE.md](OPTIMIZATION_QUEUE.md)
 - [TODO.md](TODO.md)
+- [session-analysis/](session-analysis/) - Session analysis tooling and process docs
+
+## AI-Assisted Optimization: Session Analysis
+
+The entire optimization campaign -- from initial source code analysis through 20 optimization experiments to final documentation -- was conducted as a collaboration between a human developer and AI coding assistants. The workflow used Claude Code (Opus 4.6) for source code analysis and documentation, and Codex CLI (GPT-5.3-Codex) for the hands-on kernel optimization work. This section documents the actual session data in chronological order: how long things took, how many tokens were consumed, and what the human-AI interaction pattern looked like.
+
+Analysis tooling and methodology are documented in [session-analysis/](session-analysis/).
+
+### 1. Claude Code: FSR4 Source Code Analysis (Pre-Work)
+
+Before any optimization began, Claude Code was used to analyze the full FSR4 source code repository (`FidelityFX-SDK-FSR4-SOURCE-CODE`) and produce a structured ANALYSIS.md. This informed the entire optimization strategy -- identifying INT8 vs FP8 paths, WMMA usage, quantization policy, and RDNA3.5-relevant optimization opportunities.
+
+| Metric | Value |
+|---|---|
+| **Session ID** | `eedc02b0-93f2-4e0f-a237-4f63a495762e` |
+| **Model** | `claude-opus-4-6` |
+| **Wall time** | **16m 0s** (Feb 26 14:53 -> 15:09 UTC) |
+| **Active time** | 16m 0s (100% -- no idle gaps) |
+| **Turns** | 19 user / 35 assistant |
+| **Tokens** | 62K input + 418K cache-create + 1.27M cache-read + 15.6K output |
+| **Total API tokens** | **~1.76M** |
+
+The initial user prompt was: *"AMD recently released their FSR4 source code. My understanding is there is an FP8 model, but can you review the repo. Is there also an FP16/BF16 model? My understanding is RDNA3 in particular has no FP8 acceleration but does have native INT8, so it'd be much better to quant to that if possible?"*
+
+Over 19 turns, Claude explored the HLSL shader source, model ONNX files, and ML2Code toolchain to produce a comprehensive analysis covering model architecture (encoder-bottleneck-decoder U-Net), quantization paths (INT8 fixed-point vs FP8 e4m3), WMMA acceleration, and the key insight that RDNA3.5 does have native INT8 support via `amd_mixed_dot` but FP8 requires WMMA matrix ops with LDS staging. This analysis directly shaped which optimizations were attempted in the Codex sessions that followed.
+
+### 2. Codex CLI: Main Optimization Session
+
+The primary optimization work was done in a single long-running Codex CLI session using GPT-5.3-Codex. The developer worked interactively through setup and early benchmarks, then left Codex running autonomously to complete the optimization queue.
+
+| Metric | Value |
+|---|---|
+| **Session ID** | `019c9a8d-bf44-7201-8831-be8c09e650c4` |
+| **Model** | `gpt-5.3-codex` (CLI v0.105.0) |
+| **Wall time** | **11h 50m** (Feb 26 15:26 -> Feb 27 03:16 UTC) |
+| **Active time** | **2h 34m** (21.7% of wall time) |
+| **Turns** | 438 turn contexts (model invocations) |
+| **User messages** | ~19 unique |
+| **Tool calls** | 400 |
+| **Tokens** | 55.54M input (53.60M cached) + 181.5K output (74.9K reasoning) |
+| **Total API tokens** | **~55.72M** |
+| **Total events** | 3,944 |
+
+#### Activity Breakdown
+
+The session had distinct phases with idle gaps between them. Timestamps are UTC:
+
+```
+Phase 1 - Setup & benchmark scaffolding     15:26-15:40  (~14 min active)
+  User messages: environment setup, hipcc verification, mamba env config,
+  copying model code into repo, planning optimization list
+    [idle 80 min - user away]
+
+Phase 2 - Benchmark tuning                  17:00-17:46  (~46 min active)
+  User messages: adjusting target durations (2m, 3m, 5m), checking variance,
+  documenting the benchmark script and testing protocol
+    [idle 67 min - user away]
+
+Phase 3 - Re-benchmark on direct TTY        18:53-19:37  (~44 min active)
+  User messages: re-running benchmarks after exiting GUI session for
+  cleaner measurements, storing baseline stats
+    [idle 30 min]
+
+Phase 4 - Autonomous optimization            20:08-20:53  (~45 min active)
+  User said "please continue" and left Codex to execute the optimization
+  queue autonomously. Codex ran through O07-O20, building/benchmarking
+  each variant, classifying results, and making keep/drop decisions.
+    [idle 6h 18min - Codex finished, user was away overnight]
+
+Phase 5 - User returned                     03:11-03:16  (~5 min active)
+  User reviewed results, asked for README and before/after comparison.
+```
+
+#### Hourly Event Density
+
+```
+15:00 UTC  ████████████████████████████████████  703 events  (setup + scaffolding)
+17:00 UTC  ████████████████████████████████████████████████  955 events  (benchmark tuning)
+18:00 UTC  ██████  111 events  (re-bench start)
+19:00 UTC  ███████████████████████████████████████████████  940 events  (benchmarking)
+20:00 UTC  █████████████████████████████████████████████████████████  1143 events  (autonomous opt!)
+03:00 UTC  █████  92 events  (user return)
+```
+
+#### Key Observation
+
+The "overnight" autonomous optimization was actually only **~45 minutes** of active work. Codex completed all of O07-O20 (14 optimization experiments including build, benchmark, classify, and decide for each) in under an hour, then sat idle until the user returned 6+ hours later. The peak activity was in the 20:00 UTC hour with 1,143 events -- the densest period of the entire session.
+
+### 3. Claude Code: Post-Optimization Documentation
+
+After the Codex optimization work completed, a Claude Code session (`af1c788b`) was used to write the project README, synthesize results into the HIP-vs-HLSL comparison table, and draft the real-world implications sections. This session also included other unrelated work, so the numbers below overcount somewhat.
+
+| Metric | Value |
+|---|---|
+| **Session ID** | `af1c788b-c174-4d2f-bf69-56e2d5ebda85` |
+| **Model** | `claude-opus-4-6` |
+| **Wall time** | ~20 min (of relevant work) |
+| **Turns** | ~54 user / ~64 assistant |
+| **Total API tokens** | ~4M (mostly prompt cache reads) |
+
+### Supporting Codex Sessions
+
+Several shorter sessions were used for setup, environment fixes, and post-optimization exploration:
+
+| Session ID | Duration | Model | Purpose | Tokens |
+|---|---|---|---|---|
+| `019c9a81` | 1m 56s | gpt-5.3-codex-spark | Initial environment probe | 475K |
+| `019c9a85` | 1m 58s | gpt-5.3-codex | First benchmark attempt | 530K |
+| `019c9a8b` | 27s | gpt-5.3-codex | AGENTS.md env update | 52K |
+| `019c9b4d` | 31s | gpt-5.3-codex | Brief env continuation | 71K |
+| `019c9d1e` | 9m 29s | gpt-5.3-codex | Post-opt DX12/Linux compile discussion | 5.03M |
+
+### Aggregate Token Usage
+
+| Tool | Sessions | Total Tokens | Notes |
+|---|---|---|---|
+| Claude Code (pre-analysis) | 1 | ~1.76M | Source code analysis, produced ANALYSIS.md |
+| Codex CLI (all fsr4) | 6 | ~61.9M | Dominated by 55.7M from main session |
+| Claude Code (post-docs) | 1 | ~4M | README/docs synthesis, mostly cache reads |
+| **Combined** | **8** | **~67.7M** | |
+
+The vast majority of tokens (>96%) were Codex input tokens, which in turn were >96% prompt cache hits. The actual novel output from all tools was relatively modest (~200K from Codex, ~31K from Claude) -- the token cost is dominated by maintaining context across hundreds of tool-call turns.
+
+### Timeline Summary
+
+```
+Feb 26  14:53 UTC  ── Claude Code: FSR4 source analysis ──────  15:09 UTC  (16 min)
+        15:11 UTC  ── Codex: setup sessions (3 short) ────────  15:25 UTC  (14 min)
+        15:26 UTC  ── Codex: main optimization session ───────────────────────────
+                      (interactive phases with idle gaps)
+        20:08 UTC     └─ autonomous optimization ─────────────  20:53 UTC  (45 min)
+                        (idle 6h 18m - user away overnight)
+Feb 27  03:11 UTC     └─ user returned, reviewed results ────  03:16 UTC  (5 min)
+        03:18 UTC  ── Claude Code: documentation synthesis ───  03:38 UTC  (20 min)
+```
+
+Total active AI compute time: **~3h 10m** (16m analysis + 2h 34m optimization + 20m docs).
+
+### What This Tells Us About AI-Assisted Optimization
+
+1. **Analysis-first approach paid off**: The 16-minute Claude pre-analysis of the FSR4 source code identified the key optimization targets (INT8 dot product paths, FP8 conversion overhead, quantization policy) before any code was written. This front-loaded understanding meant the Codex optimization session could work from a structured plan rather than discovering the codebase as it went.
+
+2. **The overnight run was fast**: 14 optimization experiments in ~45 minutes of autonomous work. Each experiment involved modifying C++ source, compiling a HIP kernel, running a 60-second benchmark, parsing results, classifying keep/drop, and updating documentation. A human doing this manually would need hours.
+
+3. **Setup was the bottleneck**: Of the 2h 34m of active Codex time, about 1h 44m was interactive setup and benchmarking -- getting the environment right, tuning benchmark parameters, establishing stable baselines. The actual optimization execution was the fastest phase.
+
+4. **Token costs are dominated by context**: 55.7M tokens for the main Codex session sounds large, but 53.6M were prompt cache hits (cheap). The actual model reasoning was 74.9K tokens. Long-running tool-heavy sessions amortize context loading across many operations.
+
+5. **Human-AI handoff worked well**: The developer set up the environment, validated the methodology, then delegated execution. The AI autonomously made sound keep/drop decisions (verified by the developer upon return). The conservative decision gate (`min_uncertainty_pct=3%`) meant the AI erred toward caution rather than accepting noise as signal.
+
+6. **Tool specialization matters**: Claude Code (Opus 4.6) was better suited for deep source analysis and documentation synthesis -- tasks requiring comprehensive reading and structured writing. Codex CLI (GPT-5.3-Codex) excelled at the iterative build-benchmark-decide loop with its tool-calling and shell execution capabilities. Using each tool for its strength made the overall workflow more effective than either alone.
