@@ -120,6 +120,44 @@ Summary:
 - INT8 remains faster than FP8 in this harness, consistent with INT8 using simpler integer ALU vs FP8's conversion overhead.
 - The INT8-vs-FP8 gap narrowed significantly (about `4.10x` narrower ratio vs before), mostly because FP8 improved a lot in the updated harness path. The initial FP8 implementation had a catastrophic per-iteration requantization policy that was 5x slower than necessary.
 
+## Theoretical vs Practical: RDNA3 Quantized Arithmetic
+
+RDNA3/3.5 provides native dot-product instructions for multiple integer precisions. The theoretical throughput scaling is straightforward -- each step down in precision doubles the elements packed per instruction:
+
+| Data Type | Instruction | Elements/Cycle/CU | Theoretical vs FP16 |
+|---|---|---|---|
+| FP16 | `v_dot2_f16_f16` | 2 MADs (4 ops) | 1x |
+| INT8 | `v_dot4_i32_iu8` | 4 MADs (8 ops) | 2x |
+| INT4 | `v_dot8_i32_iu4` | 8 MADs (16 ops) | 4x |
+
+FP8 (e4m3) takes a different path -- it requires WMMA (Wave Matrix Multiply Accumulate) for 16x16 matrix tiles with LDS staging, rather than simple per-lane dot products.
+
+### What We Actually Measured (Strix Halo iGPU, gfx1151)
+
+The practical results diverge significantly from theoretical expectations:
+
+1. **Scalar INT8 > packed INT8 by ~32%**: The `v_dot4_i32_iu8` / `amd_mixed_dot` instruction that should be the fast path was actually slower than scalar element-wise multiply-accumulate on gfx1151. This was our single largest optimization finding and affects 93% of FSR4's compute passes (passes 1-13). The likely cause is microarchitectural scheduling differences on the RDNA3.5 iGPU -- the packed dot-product instruction may have higher latency or worse pipelining than four scalar multiplies on this specific target.
+
+2. **FP8 is 3.7x slower than INT8** (after optimization): Despite FP8 being the same bit-width as INT8, the WMMA requirement introduces LDS staging overhead that dominates on iGPU. Before optimization the gap was 15x, mostly due to a catastrophic per-iteration requantization bug -- but even after fixing that, FP8 can't match INT8's simple ALU path on shared-memory-constrained hardware.
+
+3. **LDS staging uniformly regresses on iGPU**: All four LDS strategies we tested (O10-O13) made things worse. The Strix Halo's shared memory subsystem is contended between CPU and GPU, making any LDS-dependent path (including FP8/WMMA) structurally disadvantaged vs register-only computation.
+
+### INT4 and Beyond: Untapped Hardware Potential
+
+RDNA3's `v_dot8_i32_iu4` instruction provides a theoretical 4x throughput advantage over FP16 and 2x over INT8 -- packing 8 four-bit elements into a single DWORD operand with INT32 accumulation. This instruction exists in hardware but is **not used by FSR4 today**.
+
+Practical barriers to INT4 adoption:
+
+- **Precision**: INT4 has only 16 discrete values (-8 to +7 signed). INT8's 256 levels are already aggressive for neural network weights/activations -- INT4 would almost certainly require **quantization-aware training (QAT)** to maintain acceptable image quality. The FSR4 model was trained for INT8/FP8 precision, not INT4.
+- **Packed instruction penalty**: Our finding that packed `v_dot4_i32_iu8` underperforms scalar INT8 on gfx1151 is a cautionary signal. `v_dot8_i32_iu4` is the same class of packed dot-product instruction and may hit the same microarchitectural scheduling penalty on iGPU. This needs benchmarking before assuming the theoretical 2x over INT8 materializes.
+- **Packing overhead**: Two INT4 values share each byte. If the model isn't natively INT4-quantized, runtime packing/unpacking costs erode the throughput advantage.
+
+**What it would take**: AMD's ML2Code toolchain would need to support INT4 quantization as a target precision, and the FSR4 model would need to be retrained with INT4-aware quantization (QAT or GPTQ-style post-training quantization with calibration). If the image quality holds, INT4 could deliver a meaningful speedup on RDNA3 -- but only if the packed instruction penalty observed with INT8 doesn't also apply to `v_dot8_i32_iu4`.
+
+### Key Takeaway
+
+On paper, lower precision = proportionally higher throughput on RDNA3. In practice, the instruction scheduling, memory subsystem, and data movement costs dominate at microsecond-scale kernel times on iGPU. The "best" precision for a given target requires empirical validation -- our results show that the theoretically optimal instruction (`v_dot4_i32_iu8`) was beaten by a simpler scalar approach, and the theoretically equivalent-width FP8 path was 3.7x slower due to its WMMA/LDS dependency.
+
 ## Benchmark Methodology
 ### Protocol
 - Primary command:
