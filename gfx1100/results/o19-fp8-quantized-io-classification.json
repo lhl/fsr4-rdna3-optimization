@@ -1,0 +1,24 @@
+{
+  "overall": "keep",
+  "metric": "median",
+  "min_uncertainty_pct": 3.0,
+  "cv_scale": 0.5,
+  "per_mode": [
+    {
+      "mode": "fp8",
+      "metric": "median",
+      "reference_ms": 0.012792666666666666,
+      "current_ms": 0.010601,
+      "delta_ms": 0.0021916666666666664,
+      "delta_pct": 17.132211162645266,
+      "uncertainty_ms": 0.00038377999999999996,
+      "uncertainty_pct": 3.0,
+      "verdict": "keep",
+      "reference_trials": 3,
+      "current_trials": 1
+    }
+  ],
+  "timestamp_utc": "2026-03-05T10:50:32.920516+00:00",
+  "reference_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/baseline-benchmark-20260305-185902.json",
+  "current_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/o19-fp8-quantized-io.json"
+}

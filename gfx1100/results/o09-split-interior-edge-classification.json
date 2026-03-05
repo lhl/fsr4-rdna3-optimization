@@ -1,0 +1,37 @@
+{
+  "overall": "unsure",
+  "metric": "median",
+  "min_uncertainty_pct": 3.0,
+  "cv_scale": 0.5,
+  "per_mode": [
+    {
+      "mode": "fp8",
+      "metric": "median",
+      "reference_ms": 0.012792666666666666,
+      "current_ms": 0.012576,
+      "delta_ms": 0.00021666666666666536,
+      "delta_pct": 1.6936786700713848,
+      "uncertainty_ms": 0.00038377999999999996,
+      "uncertainty_pct": 3.0,
+      "verdict": "unsure",
+      "reference_trials": 3,
+      "current_trials": 1
+    },
+    {
+      "mode": "int8",
+      "metric": "median",
+      "reference_ms": 0.007746,
+      "current_ms": 0.007611,
+      "delta_ms": 0.00013500000000000057,
+      "delta_pct": 1.7428350116189073,
+      "uncertainty_ms": 0.00023238,
+      "uncertainty_pct": 2.9999999999999996,
+      "verdict": "unsure",
+      "reference_trials": 3,
+      "current_trials": 1
+    }
+  ],
+  "timestamp_utc": "2026-03-05T10:29:49.794957+00:00",
+  "reference_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/baseline-benchmark-20260305-185902.json",
+  "current_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/o09-split-interior-edge.json"
+}

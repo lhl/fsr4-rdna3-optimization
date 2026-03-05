@@ -1,0 +1,80 @@
+# WORKLOG (gfx1100)
+
+## 2026-03-05
+- Promoted optimized FP8 path to default for `gfx1100` harness:
+  - `gfx1100/benchmarks/baseline_kernels_bench.cpp`: `fp8_quantized_io = true`
+- Captured new final-default benchmark (`no flags`, `--trials 3`):
+  - `gfx1100/results/gfx1100-final-default-optimized-trials3.json`
+  - classification: `gfx1100/results/gfx1100-final-default-optimized-trials3-classification.json`
+  - INT8 mean-of-mean: `0.007713 ms` (`+0.54%` vs prior gfx1100 baseline)
+  - FP8 mean-of-mean: `0.010641 ms` (`+16.90%` vs prior gfx1100 baseline)
+- Attempted direct run of a true `gfx1151` build on W7900 host:
+  - forced build command with `--arch gfx1151 --force-rebuild` aborts at runtime (HIP code-object assertion / SIGABRT), confirming cross-arch execution is not supported on this host.
+  - command output captured in terminal history; comparison uses recorded gfx1151 final JSON instead.
+- Restored local executable to `gfx1100` code object after the `gfx1151` attempt:
+  - `gfx1100/results/gfx1100-rebuild-after-gfx1151-attempt.json`
+- Updated `gfx1100/README.md` with:
+  - before/after final results table
+  - final optimized defaults summary
+  - cross-target comparison against `gfx1151` final reference
+- Executed full optimization queue batch (`O02`-`O20`) on `gfx1100` using:
+  - `gfx1100/run_all_optimizations.sh`
+  - reference baseline: `gfx1100/results/baseline-benchmark-20260305-185902.json`
+- Batch artifacts written under `gfx1100/results/` as deterministic files:
+  - stats: `oXX-*.json`
+  - classifications: `oXX-*-classification.json`
+- High-level outcomes:
+  - classification count: `drop=12`, `keep=1`, `unsure=10`
+  - strongest confirmed keep: `O19 fp8-quantized-io` (`+17.13%` FP8 median improvement)
+  - strongest regressions: `O16/O17` fusion breaks and `O08` per-iter requant
+  - control rerun (`O20`) stayed near baseline (`overall=unsure`, tiny deltas)
+- Captured compare-ready baseline (`trials=3`) for default config (`threads=256`, `items-per-thread=1`):
+  - Command:
+    - `mamba run -n therock ./baseline-benchmark.py --no-build --mode both --target-seconds 60 --min-runs 200 --reps-per-run 200 --elements 262144 --inner-int8 16 --inner-fp8 16 --threads 256 --items-per-thread 1 --trials 3`
+  - Artifact: `gfx1100/results/baseline-benchmark-20260305-185902.json`
+  - Aggregate INT8: mean `0.007754 ms`, stdev-of-mean `0.000032`
+  - Aggregate FP8: mean `0.012805 ms`, stdev-of-mean `0.000067`
+- Replication experiments (initial pass):
+  - O02 `threads=64`: `unsure` overall (INT8 high variance in this run, cv `6.418%`)
+    - stats: `gfx1100/results/baseline-benchmark-20260305-185050.json`
+    - class: `gfx1100/results/baseline-benchmark-classification-20260305-185050.json`
+  - O02 `threads=128`: `unsure` overall
+    - stats: `gfx1100/results/baseline-benchmark-20260305-185253.json`
+    - class: `gfx1100/results/baseline-benchmark-classification-20260305-185253.json`
+  - O06 packed INT8 (`--force-packed-int8-io`): `drop` overall
+    - INT8 delta vs reference median: `-7.320%`
+    - stats: `gfx1100/results/baseline-benchmark-20260305-190114.json`
+    - class: `gfx1100/results/baseline-benchmark-classification-20260305-190114.json`
+  - O05 runtime loops (`--force-runtime-inner-loops`): `drop` overall
+    - FP8 delta vs reference median: `-360.084%` (major regression)
+    - stats: `gfx1100/results/baseline-benchmark-20260305-190318.json`
+    - class: `gfx1100/results/baseline-benchmark-classification-20260305-190318.json`
+  - O03 `items-per-thread=2`: `unsure` overall (INT8 `keep`, FP8 `unsure`)
+    - stats: `gfx1100/results/baseline-benchmark-20260305-190523.json`
+    - class: `gfx1100/results/baseline-benchmark-classification-20260305-190523.json`
+  - O03 `items-per-thread=4`: `unsure` overall (INT8 `keep`, FP8 `drop`)
+    - stats: `gfx1100/results/baseline-benchmark-20260305-190726.json`
+    - class: `gfx1100/results/baseline-benchmark-classification-20260305-190726.json`
+- Created isolated `gfx1100/` workspace to avoid touching existing `gfx1151` workflow artifacts.
+- Reviewed root docs (`README.md`, `AGENTS.md`, `REFERENCE-profiling.md`, `IMPLEMENTATION.md`, `WORKLOG.md`, `TODO.md`) for protocol and environment assumptions.
+- Ran environment sanity checks in `therock` for W7900/gfx1100:
+  - `rocm-sdk version`: `7.12.0a20260304`
+  - `hipcc --version`: HIP `7.2.26043-9999` (clang 22)
+  - `rocminfo`: enumerates `gfx1100` / `AMD Radeon Pro W7900`
+  - `rocm-smi`: `GFX Version: gfx1100`
+  - HIP smoke compile/run for `--offload-arch=gfx1100`: pass (`exit=0`)
+- Smoke benchmark run:
+  - Command:
+    - `mamba run -n therock ./baseline-benchmark.py --mode both --target-seconds 1 --min-runs 5 --max-runs 30 --warmup-runs 2 --reps-per-run 20 --elements 262144 --inner-int8 16 --inner-fp8 16 --threads 256 --items-per-thread 1`
+  - Artifact: `gfx1100/results/baseline-benchmark-20260305-184537.json`
+  - INT8: mean `0.004830 ms`, stddev `0.000056`, cv `1.154%`
+  - FP8: mean `0.010916 ms`, stddev `0.000168`, cv `1.543%`
+- Protocol baseline run (`60s` per mode):
+  - Command:
+    - `mamba run -n therock ./baseline-benchmark.py --no-build --mode both --target-seconds 60 --min-runs 200 --reps-per-run 200 --elements 262144 --inner-int8 16 --inner-fp8 16 --threads 256 --items-per-thread 1`
+  - Artifact: `gfx1100/results/baseline-benchmark-20260305-184741.json`
+  - INT8: mean `0.007771 ms`, stddev `0.000046`, cv `0.591%`, runs `38119`
+  - FP8: mean `0.012682 ms`, stddev `0.000059`, cv `0.467%`, runs `23471`
+- Cross-target quick compare vs existing gfx1151 final baseline (`results/baseline-benchmark-20260227-052146.json`):
+  - INT8: `+44.55%` slower on `gfx1100` (`0.007771` vs `0.005376`)
+  - FP8: `-36.17%` faster on `gfx1100` (`0.012682` vs `0.019868`)
