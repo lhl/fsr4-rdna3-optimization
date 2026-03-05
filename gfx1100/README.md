@@ -60,7 +60,7 @@ On gfx1100, the INT8-vs-FP8 gap is much narrower (1.38x after optimization vs 3.
 | ID | Change | gfx1100 | gfx1151 | Notes |
 |---|---|---|---|---|
 | O01 | Protocol lock | Keep | Keep | Stable baselines on both |
-| O02 | Threadgroup 64/128 | Unsure/worse | Unsure/worse | 256 threads best on both |
+| O02 | Threadgroup 64/128 | Unsure/worse | Unsure/worse | No confidence-grade win over 256 on either target |
 | O04 | Wave-size check | warpSize=32 | warpSize=32 | Same hardware wave size |
 | O05 | Runtime inner loops | Drop (FP8 -360%) | Drop (high variance) | Compile-time unrolling wins on both; gfx1100 shows even larger FP8 regression |
 | O07 | In-loop scale/bias | Drop | Drop | Hoisted loads better on both |
@@ -147,6 +147,24 @@ Batch summary: `drop=12`, `keep=1`, `unsure=10` (conservative gate: `min_uncerta
 | HIP/ROCm | HIP `7.12.60490-128c4eea36` |
 | ROCm SDK | `7.12.0a20260226` |
 
+## Attempted gfx1151 Run On W7900 (What Failed and Why)
+
+We attempted to run the `gfx1151` final kernel path directly on this `gfx1100` host. There were two distinct outcomes:
+
+1. **Initial attempt (misleading, not a true gfx1151 execution):**
+   - Command used `--arch gfx1151` but **without** `--force-rebuild`.
+   - The harness reused the existing `gfx1100` binary.
+   - Artifact: `results/gfx1151-final-kernel-attempt-on-w7900.json`
+   - Evidence: payload config says `arch=gfx1151`, but runtime `INFO` reports `gcnArchName=gfx1100`.
+   - Interpretation: this file is a valid run, but it is **not** a true `gfx1151` code-object run.
+
+2. **Forced true gfx1151 attempt (expected failure):**
+   - Re-run with `--arch gfx1151 --force-rebuild`.
+   - Build succeeded, runtime failed immediately with HIP code-object assertion (`hip_code_object.cpp`) and `SIGABRT`.
+   - Root cause: a `gfx1151` code object cannot be dispatched on a `gfx1100` device.
+
+Implication: direct `gfx1151` execution must be done on `gfx1151` hardware; this README uses recorded `gfx1151` final results from the parent project for cross-architecture comparison.
+
 ## Benchmark Protocol
 
 Same protocol as gfx1151 for direct comparability:
@@ -167,7 +185,7 @@ Same protocol as gfx1151 for direct comparability:
 
 4. **O19 (FP8 quantized-IO) is the one confirmed optimization for gfx1100**: +17% FP8 improvement. This was unmeasurable on gfx1151 due to variance, suggesting it's a real win that the iGPU's noise floor hid.
 
-5. **No INT8 optimization beat baseline on gfx1100**: The default configuration (scalar, unrolled, threads=256, items=1) was already near-optimal for INT8 on the discrete GPU. The items=4 variant showed promise (+11.8% INT8) but degraded FP8, making it unsuitable as a default without per-mode configuration.
+5. **No INT8 optimization was promoted to default on gfx1100**: The default configuration (scalar, unrolled, threads=256, items=1) remained the best balanced choice under mixed INT8+FP8 gating. Some INT8-only improvements appeared (for example `items=4`, +11.8% INT8) but came with FP8 regressions, so they were not adopted as defaults.
 
 6. **gfx1100's narrower INT8/FP8 gap (1.38x after optimization vs 3.70x)** suggests the discrete GPU handles FP8 conversion overhead much better, likely due to dedicated VRAM bandwidth and more predictable memory latency.
 
