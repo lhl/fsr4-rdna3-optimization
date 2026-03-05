@@ -1,5 +1,31 @@
 # Work Log
 
+## 2026-03-05
+
+### Session Goal
+- Audit the new README findings sections (first pass + grounding pass) for claim accuracy, evidence boundaries, and overreach.
+
+### Changes / Commands
+- Reviewed recent documentation commits:
+  - `5ce5be9` (`optimization findings first pass`)
+  - `49a735e` (`clarify theory vs measured results`)
+- Cross-checked README claims against:
+  - benchmark artifacts in `results/`
+  - optimization tables in `OPTIMIZATION_RESULTS.md` / `IMPLEMENTATION.md`
+  - source-path evidence in `fsr4-src/baseline/...` (INT8 dot path + FP8 WMMA path)
+- Updated `README.md` to tighten grounding:
+  - clarified loop-level requantization wording
+  - replaced unverified intrinsic-name specifics in INT4 discussion with instruction-class wording
+  - added explicit O08 FP8 penalty numbers (`0.114545 ms` vs `0.019868 ms`, `~5.76x`)
+  - added an "Evidence Boundaries (Measured vs Inferred)" section
+  - added a direct-TTY multi-trial follow-up recommendation for `Unsure` variants (`O09/O15/O19`)
+
+### Benchmarks
+- No new benchmark runs in this session (documentation/analysis audit only).
+
+### Validation / Results
+- README quantitative claims and ratios were re-checked against recorded benchmark JSON values and remain consistent after wording updates.
+
 ## 2026-02-27
 
 ### Session Goal

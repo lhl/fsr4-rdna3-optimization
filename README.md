@@ -77,7 +77,7 @@ The harness is most useful as a **directional signal** about RDNA3.5 arithmetic 
 Applying our microkernel findings to the actual FSR4 implementation would require changes at different levels depending on the optimization:
 
 **Directly applicable** (same policy, confirmed by both harness and HLSL source):
-- **Store-time quantization**: Accumulate in full precision, quantize once at output. The real HLSL already does this (`round(vs * rcpScale)` at the end of each convolution). Our harness confirmed that per-iteration requantization causes catastrophic regression (INT8 +194%, FP8 +476%). Any code path that requantizes mid-accumulation should be treated as a bug.
+- **Store-time quantization**: Accumulate in full precision, quantize once at output. The real HLSL already does this (`round(vs * rcpScale)` at the end of each convolution). Our harness confirmed that forcing per-iteration requantization causes catastrophic regression (INT8 +194%, FP8 +476%). Requantizing *inside the inner accumulate loop* should be treated as a performance bug/anti-pattern in this workload.
 - **Compile-time loop unrolling**: The real HLSL uses `[unroll]` on all kernel loops. Our harness confirmed ~12% gains from unrolling vs runtime loop control. ML2Code should ensure all generated inner loops remain statically unrollable.
 
 **Directionally relevant** (same hardware, different instruction mix):
@@ -95,6 +95,7 @@ Applying our microkernel findings to the actual FSR4 implementation would requir
 - Consider `-O3` as the default compiler optimization level -- our testing found no benefit from `-O2` or `-Ofast/-ffast-math`, and `-O3` matched or beat all alternatives
 - Investigate pass/post-pass fusion opportunities for the 27-dispatch INT8 pipeline (14 model + 13 post), especially where dispatch overhead may dominate compute time on low-power iGPUs
 - **Next validation**: disassemble both the HIP microkernels and the DXC-generated fused HLSL shaders to confirm the exact ISA emitted for packed-dot vs scalar INT8 paths (and rule out compiler artifacts).
+- Re-run `Unsure` variants (`O09`, `O15`, `O19`) in direct TTY with multi-trial aggregation (`--trials 3`) before finalizing any generator-level decision.
 
 ## Before/After Performance (Main Summary)
 Comparison of the stable direct-TTY baseline vs the final selected defaults after the optimization loop.
@@ -119,7 +120,7 @@ Lower time is better. `FP8/INT8` > 1.0 means INT8 is faster.
 
 Summary:
 - INT8 remains faster than FP8 in this harness, consistent with INT8 using simpler integer ALU vs FP8's conversion overhead.
-- The INT8-vs-FP8 gap narrowed significantly (about `4.10x` narrower ratio vs before), mostly because FP8 improved a lot in the updated harness path. The initial FP8 implementation had a catastrophic per-iteration requantization policy that was ~6x slower than necessary.
+- The INT8-vs-FP8 gap narrowed significantly (about `4.10x` narrower ratio vs before), mostly because FP8 improved a lot in the updated harness path. In phase-2 A/B, forced FP8 per-iteration requantization measured `0.114545 ms` vs `0.019868 ms` control (`~5.76x` slower), which explains most of the original FP8 gap.
 
 ## Theoretical vs Practical: RDNA3 Quantized Arithmetic
 
@@ -128,8 +129,8 @@ RDNA3/3.5 provides native dot-product instructions for multiple integer precisio
 | Data Type | Instruction Class | Packed Elements / Instruction (per lane) | Relative Packing vs FP16 |
 |---|---|---|---|
 | FP16 | `dot2` (e.g., `v_dot2_f16_f16`) | 2 | 1x |
-| INT8 | `sdot4` (HIP: `amd_mixed_dot(char4, ...)` / `__ockl_sdot4`) | 4 | 2x |
-| INT4 | `sdot8` (HIP: `amd_mixed_dot(int, ...)` / `__ockl_sdot8`) | 8 | 4x |
+| INT8 | packed INT8 dot (HIP: `amd_mixed_dot(char4, ...)`) | 4 | 2x |
+| INT4 | packed INT4 dot (`dot8`/`sdot8` class) | 8 | 4x |
 
 FSR4's FP8 (e4m3) HLSL path takes a different approach: it is WMMA-only (`AmdWaveMatrixMultiply()` for 16x16 wave-matrix tiles) and stages inputs via `groupshared` in the FP8 Conv2D implementation (`float8_NHWC/Conv2D_k2s2b.hlsli`). Our HIP harness does **not** benchmark WMMA; its FP8 mode measures FP8 conversion overhead + scalar FP32 FMA.
 
@@ -137,7 +138,7 @@ FSR4's FP8 (e4m3) HLSL path takes a different approach: it is WMMA-only (`AmdWav
 
 The practical results diverge significantly from theoretical expectations:
 
-1. **Scalar INT8 MAC > packed dot (`amd_mixed_dot` / `__ockl_sdot4`) by ~32% (HIP microkernel)**: On gfx1151, our scalar element-wise multiply-accumulate kernel ran ~31.84% faster than the packed-dot intrinsic kernel (`--force-packed-int8-io`). This is the biggest INT8 surprise in the harness. Because the real INT8 model uses `dot4add_i8packed` heavily in passes 1-13 (13/14 model passes, ~93%), this is a high-value result to validate under DXC on the actual fused HLSL operators before assuming it transfers 1:1.
+1. **Scalar INT8 MAC > packed dot (`amd_mixed_dot`) by ~32% (HIP microkernel)**: On gfx1151, our scalar element-wise multiply-accumulate kernel ran ~31.84% faster than the packed-dot intrinsic kernel (`--force-packed-int8-io`). This is the biggest INT8 surprise in the harness. Because the real INT8 model uses `dot4add_i8packed` heavily in passes 1-13 (13/14 model passes, ~93%), this is a high-value result to validate under DXC on the actual fused HLSL operators before assuming it transfers 1:1.
 
 2. **FP8 conversion+FMA is 3.7x slower than INT8 in this harness (HIP microkernel)**: After fixing the per-iteration requantization policy, the FP8 microkernel is still ~3.70x slower than INT8 on gfx1151 (0.019868 ms vs 0.005376 ms). This is **not** WMMA performance; real FSR4 FP8 uses WMMA + `groupshared` staging and needs separate measurement on Strix Halo.
 
@@ -145,12 +146,12 @@ The practical results diverge significantly from theoretical expectations:
 
 ### INT4 and Beyond: Untapped Hardware Potential
 
-RDNA3 also exposes packed 4-bit dot-product instructions (HIP exposes this as `amd_mixed_dot(int, int, ...)` / `__ockl_sdot8`), which pack 8 INT4 elements per lane per instruction with INT32 accumulation. FSR4 does **not** ship an INT4 model today, so this is purely "future work" territory.
+RDNA3 also exposes packed 4-bit dot-product instructions (dot8/sdot8 class), which pack 8 INT4 elements per lane per instruction with INT32 accumulation. FSR4 does **not** ship an INT4 model today, so this is purely "future work" territory.
 
 Practical barriers to INT4 adoption:
 
-- **Precision**: INT4 has only 16 discrete values (-8 to +7 signed). INT8's 256 levels are already aggressive for neural network weights/activations -- INT4 would almost certainly require **quantization-aware training (QAT)** to maintain acceptable image quality. The FSR4 model was trained for INT8/FP8 precision, not INT4.
-- **Packed instruction penalty**: Our finding that packed INT8 dot (`amd_mixed_dot` / `__ockl_sdot4`) underperforms scalar INT8 MAC on gfx1151 is a cautionary signal. The INT4 dot8 path is a similar packed-dot instruction class and may hit the same target-specific penalty. This needs benchmarking before assuming the theoretical 2x over INT8 materializes.
+- **Precision**: INT4 has only 16 discrete values (-8 to +7 signed). INT8's 256 levels are already aggressive for neural network weights/activations -- INT4 would almost certainly require **quantization-aware training (QAT)** to maintain acceptable image quality. The shipped FSR4 model variants in this tree are INT8/FP8, not INT4.
+- **Packed instruction penalty**: Our finding that packed INT8 dot (`amd_mixed_dot`) underperforms scalar INT8 MAC on gfx1151 is a cautionary signal. The INT4 dot8 path is a similar packed-dot instruction class and may hit the same target-specific penalty. This needs benchmarking before assuming the theoretical 2x over INT8 materializes.
 - **Packing overhead**: Two INT4 values share each byte. If the model isn't natively INT4-quantized, runtime packing/unpacking costs erode the throughput advantage.
 
 **What it would take**: AMD's ML2Code toolchain would need to support INT4 quantization as a target precision, and the FSR4 model would need to be retrained with INT4-aware quantization (QAT or GPTQ-style post-training quantization with calibration). If the image quality holds, INT4 could deliver a meaningful speedup on RDNA3 -- but only if the packed-instruction penalty observed with INT8 doesn't also apply to the packed INT4 dot8 instruction class.
@@ -158,6 +159,12 @@ Practical barriers to INT4 adoption:
 ### Key Takeaway
 
 On paper, packing more low-precision elements per dot instruction should increase arithmetic density. In practice on gfx1151, the fastest choice depended heavily on surrounding overhead and codegen: the packed INT8 dot intrinsic underperformed scalar MAC in our microkernel, the FP8 conversion+FMA microkernel remained ~3.7x slower than INT8, and naive LDS staging regressed. Treat these as harness results; validate on the real DXC-generated shaders before making ML2Code generator decisions (especially for FP8/WMMA).
+
+### Evidence Boundaries (Measured vs Inferred)
+
+- **Measured directly in this repo (high confidence):** O06 scalar-vs-packed INT8 delta (`-31.84%`), O08 per-iter requant penalty (INT8 `+194%`, FP8 `+476%`), and O10-O13 LDS regressions under this microkernel workload.
+- **Source-audited from FSR4 HLSL (high confidence):** Pass 0 uses `dot2add`; passes 1-13 are dominated by `dot4add_i8packed`; FP8 Conv2D path is WMMA-gated and uses `groupshared` staging.
+- **Inferred hypotheses (needs profiling/disassembly):** why packed INT8 loses on gfx1151 (instruction scheduling/codegen effects), and how much WMMA+`groupshared` overhead contributes on Strix Halo in real fused shaders.
 
 ## Benchmark Methodology
 ### Protocol
