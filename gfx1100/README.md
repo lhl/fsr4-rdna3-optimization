@@ -6,11 +6,11 @@ Secondary benchmark run on Radeon Pro W7900 (`gfx1100`, discrete RDNA3) to test 
 
 ## Key Findings
 
-The short answer is: most optimizations transfer, but the two architectures have opposite performance profiles for INT8 vs FP8, and the single biggest gfx1151 win did not reproduce on gfx1100.
+The short answer is: most optimizations transfer, but the two architectures have opposite performance profiles for INT8 vs FP8, and the biggest gfx1151 win reproduces at much smaller magnitude on gfx1100.
 
 - **INT8 is faster than FP8 on both GPUs.** This is the most important takeaway: regardless of architecture, INT8 dot-product compute is faster than FP8 conversion+FMA in this harness. On gfx1100, INT8 is 1.46x faster; on gfx1151, INT8 is 3.70x faster. If you're choosing a quantization precision for latency, INT8 wins everywhere we tested.
 - **Between the two GPUs, gfx1100 is ~2x faster at FP8 while gfx1151 is ~27% faster at INT8.** The discrete GPU's dedicated VRAM and FP pipeline handle FP8 conversion+FMA much better than the iGPU's shared DRAM. The iGPU has better INT8 dot-product throughput per-kernel despite having far fewer CUs. But both GPUs still run INT8 faster than FP8 in absolute terms.
-- **The biggest gfx1151 win didn't carry over.** On gfx1151, switching from packed `amd_mixed_dot` to scalar INT8 MAC improved performance by ~32% -- the single largest optimization. On gfx1100, scalar is still slightly better than packed, but the delta is small and not a significant win.
+- **The biggest gfx1151 win shrank on gfx1100.** On gfx1151, switching from packed `amd_mixed_dot` to scalar INT8 MAC improved performance by ~32% -- the single largest optimization. On gfx1100, scalar still wins, but by about ~8% rather than ~32%.
 - **gfx1100 found its own wins not seen on gfx1151.** Processing 4 items per thread (instead of 1) improved INT8 by ~11.5%. Reducing the FP8 inner loop depth from 16 to 8 iterations improved FP8 by ~6%. Neither of these helped on gfx1151.
 - **Both architectures agree on what hurts.** LDS staging, per-iteration requantization, runtime (non-unrolled) inner loops, unfused post-ops, and two-pass dispatch all regressed on both GPUs. These are robust anti-patterns for this workload class.
 - **Modest per-mode improvements on gfx1100: INT8 +12%, FP8 +22%** over the raw baseline, achieved via architecture-tuned config for each mode rather than a one-size-fits-all setting.
@@ -37,13 +37,13 @@ The FP8/INT8 ratio tells you how much slower FP8 is relative to INT8 on each GPU
 
 **INT8 gap (~27%, gfx1151 wins):** This is more surprising -- the iGPU with fewer CUs is faster per-kernel at INT8. RDNA3.5 may have improved integer dot-product throughput or scheduling relative to RDNA3. The ISA disassembly shows nearly identical instruction shapes across both architectures (same `v_dot4` and `v_mul/v_mad` counts), so the difference is likely in execution throughput or latency rather than codegen.
 
-**Scalar vs packed INT8 delta (big on gfx1151, small on gfx1100):** On gfx1151, scalar element-wise INT8 MAC outperformed the packed `amd_mixed_dot` intrinsic by ~32%. On gfx1100, the same test showed scalar is still slightly better but within noise. The ISA is the same in both cases, so this is a microarchitectural throughput difference -- gfx1151 appears to have a larger penalty for the packed dot-product instruction relative to scalar arithmetic.
+**Scalar vs packed INT8 delta (big on gfx1151, smaller on gfx1100):** On gfx1151, scalar element-wise INT8 MAC outperformed the packed `amd_mixed_dot` intrinsic by ~32%. On gfx1100, scalar still outperformed packed by about ~8%. The ISA is the same in both cases, so this is a microarchitectural throughput difference -- gfx1151 shows a larger penalty for the packed dot-product instruction relative to scalar arithmetic.
 
 ### What Transfers Across Architectures
 
 | Optimization | gfx1151 | gfx1100 | Transfers? |
 |---|---|---|---|
-| Scalar INT8 > packed dot | +32% (big win) | Small/noise | Direction yes, magnitude no |
+| Scalar INT8 > packed dot | +32% (big win) | ~8% (scalar faster) | Direction yes, magnitude no |
 | Compile-time loop unrolling | +12% | Keep (default) | Yes |
 | Store-time quantization (not per-iter) | Requant: +194% INT8, +476% FP8 regression | Requant: catastrophic regression | Yes |
 | LDS staging (all variants) | All regressed | All regressed | Yes (anti-pattern) |
@@ -62,7 +62,7 @@ The optimization sweep produced modest but consistent improvements over the untu
 | **Tuned** | Best config per mode | 0.006834 | 0.010006 |
 | **Improvement** | | +11.9% | +21.9% |
 
-No single config improved both modes -- the knobs that helped INT8 were neutral or harmful for FP8 and vice versa. Tuning each mode independently let us capture wins for both:
+No shared config delivered a large, significant win in both modes. `fp8_quantized_io` was a major FP8 win and effectively neutral for INT8, while the remaining strong wins were mode-specific. Tuning each mode independently let us capture wins for both:
 
 - **INT8 tuning**: `items_per_thread=4` (processes 4 vectors per thread instead of 1) gave +11.9%. Higher values (8, 16) regressed; the sweet spot is 4.
 - **FP8 tuning**: `fp8_quantized_io` (avoids redundant FP8 requantization on I/O) was the single largest FP8 win at ~17%. On top of that, `inner_fp8=8` (halves the inner loop depth from 16 to 8) added another ~6%.
@@ -85,7 +85,7 @@ Two rounds of experiments were run:
 - **O-series (O01-O20)**: Replicate the same 20 optimizations tested on gfx1151 in the [root project](../README.md#optimization-attempts-single-glance). These test whether gfx1151 findings carry over to gfx1100.
 - **P-series (P0-P3)**: Additional gfx1100-specific follow-up experiments, organized by priority. P0 = rerun ambiguous O-series results with more trials. P1 = extended parameter sweeps. P2 = ISA-level investigations (disassembly, profiling). P3 = blocked experiments (WMMA prototype, cross-arch execution).
 
-Summary: 5 of the 20 O-series optimizations were kept on gfx1100 (vs 5 on gfx1151), 11 dropped, 4 unsure. The P-series refined the winners into the final Tuned Config.
+Summary: the initial O-series pass produced 3 keeps, 11 drops, and 6 unsure outcomes on gfx1100. P-series reruns then promoted O03 (`items_per_thread`) and O14 (`inner_fp8=8`) into mode-specific keeps, yielding a final optimization-family split of 5 keeps, 11 drops, and 4 unsure.
 
 ## Environment
 
