@@ -6,6 +6,9 @@
 
 This is not a full DX12 frame-time benchmark of shipping FSR4 -- it isolates the low-level compute primitives to understand how RDNA3.5 handles the quantized arithmetic that FSR4 depends on.
 
+Related writeups:
+- `gfx1100/README.md` — Cross-architecture validation on Radeon Pro W7900 (RDNA3, `gfx1100`) vs Strix Halo (RDNA3.5, `gfx1151`).
+
 ## FSR4 Model Overview
 
 FSR4 uses a **quantized CNN** compiled from ONNX to HLSL shaders via ML2Code. In this repo, the generated v07 model is organized as an encoder/bottleneck/decoder pipeline with skip connections. Key details:
