@@ -1,0 +1,37 @@
+{
+  "overall": "unsure",
+  "metric": "median",
+  "min_uncertainty_pct": 3.0,
+  "cv_scale": 0.5,
+  "per_mode": [
+    {
+      "mode": "fp8",
+      "metric": "median",
+      "reference_ms": 0.010634666666666667,
+      "current_ms": 0.010586666666666666,
+      "delta_ms": 4.800000000000117e-05,
+      "delta_pct": 0.45135406218657065,
+      "uncertainty_ms": 0.00031904,
+      "uncertainty_pct": 2.9999999999999996,
+      "verdict": "unsure",
+      "reference_trials": 3,
+      "current_trials": 3
+    },
+    {
+      "mode": "int8",
+      "metric": "median",
+      "reference_ms": 0.007715666666666667,
+      "current_ms": 0.007684333333333333,
+      "delta_ms": 3.1333333333333734e-05,
+      "delta_pct": 0.4061001425670765,
+      "uncertainty_ms": 0.00023147,
+      "uncertainty_pct": 3.0,
+      "verdict": "unsure",
+      "reference_trials": 3,
+      "current_trials": 3
+    }
+  ],
+  "timestamp_utc": "2026-03-05T13:27:55.987259+00:00",
+  "reference_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/gfx1100-final-default-optimized-trials3.json",
+  "current_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o03-items1-trials3.json"
+}

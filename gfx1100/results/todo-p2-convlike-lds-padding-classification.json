@@ -1,0 +1,24 @@
+{
+  "overall": "drop",
+  "metric": "median",
+  "min_uncertainty_pct": 3.0,
+  "cv_scale": 0.5,
+  "per_mode": [
+    {
+      "mode": "int8",
+      "metric": "median",
+      "reference_ms": 0.007715666666666667,
+      "current_ms": 0.008724,
+      "delta_ms": -0.0010083333333333342,
+      "delta_pct": -13.068648204950977,
+      "uncertainty_ms": 0.00023147,
+      "uncertainty_pct": 3.0,
+      "verdict": "drop",
+      "reference_trials": 3,
+      "current_trials": 1
+    }
+  ],
+  "timestamp_utc": "2026-03-05T15:55:59.019834+00:00",
+  "reference_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/gfx1100-final-default-optimized-trials3.json",
+  "current_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p2-convlike-lds-padding.json"
+}

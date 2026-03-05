@@ -1,0 +1,10 @@
+{
+  "arch": "gfx1151",
+  "asm_path": "build/disasm/gfx1151.s",
+  "counts": {
+    "v_dot4_like": 254,
+    "v_mad_or_mac_like": 172,
+    "v_mul_like": 394,
+    "v_mfma_like": 0
+  }
+}

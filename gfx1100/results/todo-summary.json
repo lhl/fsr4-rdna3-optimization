@@ -1,0 +1,343 @@
+{
+  "int8": [
+    {
+      "name": "todo-p1-candA-int8-items4-trials3",
+      "mean_ms": 0.006835666666666667,
+      "median_ms": 0.0068263333333333336,
+      "cv_pct": 1.1966703333333333,
+      "delta_pct": 11.526331706052616,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-candA-int8-items4-trials3.json"
+    },
+    {
+      "name": "todo-p1-candC-int8-items4-inner16-trials3",
+      "mean_ms": 0.006838333333333333,
+      "median_ms": 0.006824333333333333,
+      "cv_pct": 0.543435,
+      "delta_pct": 11.552252991748391,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-candC-int8-items4-inner16-trials3.json"
+    },
+    {
+      "name": "todo-p1-items-int8-4",
+      "mean_ms": 0.006853,
+      "median_ms": 0.006842,
+      "cv_pct": 0.499937,
+      "delta_pct": 11.323281634769085,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-items-int8-4.json"
+    },
+    {
+      "name": "todo-p1-items-int8-4-trials3",
+      "mean_ms": 0.006864333333333333,
+      "median_ms": 0.006848666666666667,
+      "cv_pct": 1.2725673333333334,
+      "delta_pct": 11.236877349116513,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-items-int8-4-trials3.json"
+    },
+    {
+      "name": "todo-p1-items-int8-2",
+      "mean_ms": 0.007389,
+      "median_ms": 0.007377,
+      "cv_pct": 0.384148,
+      "delta_pct": 4.389337711150476,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-items-int8-2.json"
+    },
+    {
+      "name": "todo-p1-threads-int8-192-trials3",
+      "mean_ms": 0.007660666666666666,
+      "median_ms": 0.007769,
+      "cv_pct": 3.6203806666666667,
+      "delta_pct": -0.691234285220545,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-int8-192-trials3.json"
+    },
+    {
+      "name": "todo-p0-o14-int8-inner16",
+      "mean_ms": 0.007709,
+      "median_ms": 0.007687,
+      "cv_pct": 0.572181,
+      "delta_pct": 0.37153842830604084,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-int8-inner16.json"
+    },
+    {
+      "name": "todo-p1-items-int8-1",
+      "mean_ms": 0.007712,
+      "median_ms": 0.007687,
+      "cv_pct": 0.578534,
+      "delta_pct": 0.37153842830604084,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-items-int8-1.json"
+    },
+    {
+      "name": "todo-p0-o14-int8-inner32",
+      "mean_ms": 0.007714,
+      "median_ms": 0.007694,
+      "cv_pct": 0.581697,
+      "delta_pct": 0.28081392837084324,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-int8-inner32.json"
+    },
+    {
+      "name": "todo-p0-o14-int8-inner16-trials3",
+      "mean_ms": 0.00773,
+      "median_ms": 0.007707333333333333,
+      "cv_pct": 0.5813816666666667,
+      "delta_pct": 0.10800535706570981,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-int8-inner16-trials3.json"
+    },
+    {
+      "name": "todo-p1-candB-int8-inner16-trials3",
+      "mean_ms": 0.007755666666666667,
+      "median_ms": 0.007731666666666666,
+      "cv_pct": 0.579945,
+      "delta_pct": -0.20737028556615789,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-candB-int8-inner16-trials3.json"
+    },
+    {
+      "name": "todo-p1-threads-int8-192",
+      "mean_ms": 0.00776,
+      "median_ms": 0.007738,
+      "cv_pct": 0.577605,
+      "delta_pct": -0.289454356936105,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-int8-192.json"
+    },
+    {
+      "name": "todo-p0-o14-int8-inner8",
+      "mean_ms": 0.007763,
+      "median_ms": 0.007739,
+      "cv_pct": 0.5929,
+      "delta_pct": -0.30241499978399194,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-int8-inner8.json"
+    },
+    {
+      "name": "todo-p0-o14-int8-inner64",
+      "mean_ms": 0.007767,
+      "median_ms": 0.007748,
+      "cv_pct": 0.587499,
+      "delta_pct": -0.41906078541495223,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-int8-inner64.json"
+    },
+    {
+      "name": "todo-p1-threads-int8-384",
+      "mean_ms": 0.007796,
+      "median_ms": 0.007777,
+      "cv_pct": 0.560415,
+      "delta_pct": -0.7949194280036296,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-int8-384.json"
+    },
+    {
+      "name": "todo-p1-threads-int8-320",
+      "mean_ms": 0.007807,
+      "median_ms": 0.007788,
+      "cv_pct": 0.549154,
+      "delta_pct": -0.9374864993303638,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-int8-320.json"
+    },
+    {
+      "name": "todo-p1-threads-int8-1024",
+      "mean_ms": 0.007813,
+      "median_ms": 0.00781,
+      "cv_pct": 0.378237,
+      "delta_pct": -1.2226206419838435,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-int8-1024.json"
+    },
+    {
+      "name": "todo-p1-threads-int8-512",
+      "mean_ms": 0.007822,
+      "median_ms": 0.007802,
+      "cv_pct": 0.556069,
+      "delta_pct": -1.118935499200759,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-int8-512.json"
+    },
+    {
+      "name": "todo-p1-items-int8-8",
+      "mean_ms": 0.008371,
+      "median_ms": 0.008358,
+      "cv_pct": 0.450977,
+      "delta_pct": -8.325052922624973,
+      "verdict": "drop",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-items-int8-8.json"
+    },
+    {
+      "name": "todo-p1-items-int8-16",
+      "mean_ms": 0.012512,
+      "median_ms": 0.012509,
+      "cv_pct": 0.440807,
+      "delta_pct": -62.12468138419665,
+      "verdict": "drop",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-items-int8-16.json"
+    }
+  ],
+  "fp8": [
+    {
+      "name": "todo-p0-o14-fp8-inner8",
+      "mean_ms": 0.00971,
+      "median_ms": 0.009942,
+      "cv_pct": 4.319409,
+      "delta_pct": 6.513289869608837,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-fp8-inner8.json"
+    },
+    {
+      "name": "todo-p1-candC-fp8-items1-inner8-trials3",
+      "mean_ms": 0.009957666666666667,
+      "median_ms": 0.010000666666666666,
+      "cv_pct": 1.8007556666666666,
+      "delta_pct": 5.961634904714151,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-candC-fp8-items1-inner8-trials3.json"
+    },
+    {
+      "name": "todo-p1-candB-fp8-inner8-trials3",
+      "mean_ms": 0.009983333333333334,
+      "median_ms": 0.009997333333333334,
+      "cv_pct": 1.4518746666666666,
+      "delta_pct": 5.992978936810433,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-candB-fp8-inner8-trials3.json"
+    },
+    {
+      "name": "todo-p0-o14-fp8-inner8-trials3",
+      "mean_ms": 0.010004666666666667,
+      "median_ms": 0.009996333333333333,
+      "cv_pct": 0.742985,
+      "delta_pct": 6.002382146439329,
+      "verdict": "keep",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-fp8-inner8-trials3.json"
+    },
+    {
+      "name": "todo-p1-threads-fp8-512",
+      "mean_ms": 0.010599,
+      "median_ms": 0.010588,
+      "cv_pct": 0.821971,
+      "delta_pct": 0.438816449348048,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-fp8-512.json"
+    },
+    {
+      "name": "todo-p0-o14-fp8-inner16",
+      "mean_ms": 0.010605,
+      "median_ms": 0.010593,
+      "cv_pct": 0.848308,
+      "delta_pct": 0.3918004012036166,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-fp8-inner16.json"
+    },
+    {
+      "name": "todo-p1-candA-fp8-items1-trials3",
+      "mean_ms": 0.010614333333333333,
+      "median_ms": 0.010651333333333334,
+      "cv_pct": 1.782958,
+      "delta_pct": -0.15672016048144338,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-candA-fp8-items1-trials3.json"
+    },
+    {
+      "name": "todo-p1-threads-fp8-512-trials3",
+      "mean_ms": 0.010641333333333333,
+      "median_ms": 0.010631333333333333,
+      "cv_pct": 0.8276816666666666,
+      "delta_pct": 0.03134403209629846,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-fp8-512-trials3.json"
+    },
+    {
+      "name": "todo-p1-threads-fp8-192",
+      "mean_ms": 0.010663,
+      "median_ms": 0.010837,
+      "cv_pct": 3.642991,
+      "delta_pct": -1.9025827482447228,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-fp8-192.json"
+    },
+    {
+      "name": "todo-p1-threads-fp8-384",
+      "mean_ms": 0.010709,
+      "median_ms": 0.010699,
+      "cv_pct": 0.809351,
+      "delta_pct": -0.604939819458371,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-fp8-384.json"
+    },
+    {
+      "name": "todo-p1-threads-fp8-320",
+      "mean_ms": 0.010813,
+      "median_ms": 0.0108,
+      "cv_pct": 0.87281,
+      "delta_pct": -1.5546639919759275,
+      "verdict": "unsure",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-fp8-320.json"
+    },
+    {
+      "name": "todo-p1-threads-fp8-1024",
+      "mean_ms": 0.011092,
+      "median_ms": 0.011082,
+      "cv_pct": 0.744344,
+      "delta_pct": -4.206369107321959,
+      "verdict": "drop",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-fp8-1024.json"
+    },
+    {
+      "name": "todo-p0-o14-fp8-inner32",
+      "mean_ms": 0.01223,
+      "median_ms": 0.012215,
+      "cv_pct": 0.775144,
+      "delta_pct": -14.860205616850548,
+      "verdict": "drop",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-fp8-inner32.json"
+    },
+    {
+      "name": "todo-p0-o14-fp8-inner64",
+      "mean_ms": 0.015264,
+      "median_ms": 0.015253,
+      "cv_pct": 0.851969,
+      "delta_pct": -43.42715646940821,
+      "verdict": "drop",
+      "path": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p0-o14-fp8-inner64.json"
+    }
+  ],
+  "mixed_policy": [
+    {
+      "policy": "candidate-C (A+B combined)",
+      "int8_ms": 0.006838333333333333,
+      "fp8_ms": 0.009957666666666667,
+      "total_ms": 0.016796,
+      "delta_total_pct_vs_ref": 8.485288775880862
+    },
+    {
+      "policy": "candidate-A (int8 items=4, fp8 items=1)",
+      "int8_ms": 0.006835666666666667,
+      "fp8_ms": 0.010614333333333333,
+      "total_ms": 0.01745,
+      "delta_total_pct_vs_ref": 4.92190337813294
+    },
+    {
+      "policy": "candidate-B (int8 inner=16, fp8 inner=8)",
+      "int8_ms": 0.007755666666666667,
+      "fp8_ms": 0.009983333333333334,
+      "total_ms": 0.017739,
+      "delta_total_pct_vs_ref": 3.3472575372320996
+    },
+    {
+      "policy": "canonical-default-both",
+      "int8_ms": 0.007712666666666666,
+      "fp8_ms": 0.010640666666666666,
+      "total_ms": 0.018353333333333333,
+      "delta_total_pct_vs_ref": 0.0
+    }
+  ],
+  "reference": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/gfx1100-final-default-optimized-trials3.json"
+}

@@ -24,6 +24,13 @@ RESULT_RE = re.compile(r"^RESULT\s+(.*)$")
 INFO_RE = re.compile(r"^INFO\s+(.*)$")
 
 
+def arch_token(arch: str) -> str:
+    token = re.sub(r"[^A-Za-z0-9_.-]+", "_", arch.strip())
+    if not token:
+        raise ValueError("arch must not be empty")
+    return token
+
+
 def parse_kv_blob(blob: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for token in blob.strip().split():
@@ -330,6 +337,9 @@ def main() -> int:
     parser.add_argument("--force-runtime-inner-loops", action="store_true")
     parser.add_argument("--force-scalar-int8-io", action="store_true")
     parser.add_argument("--force-packed-int8-io", action="store_true")
+    parser.add_argument("--force-isa-packed-int8-io", action="store_true")
+    parser.add_argument("--force-ilp2-int8", action="store_true")
+    parser.add_argument("--force-convlike-int8", action="store_true")
     parser.add_argument("--force-inloop-scale-bias", action="store_true")
     parser.add_argument("--force-per-iter-requant", action="store_true")
     parser.add_argument("--split-interior-edge", action="store_true")
@@ -393,7 +403,7 @@ def main() -> int:
 
     root = Path(__file__).resolve().parent
     source = root / "benchmarks" / "baseline_kernels_bench.cpp"
-    binary = root / "build" / "baseline_kernels_bench"
+    binary = root / "build" / f"baseline_kernels_bench.{arch_token(args.arch)}"
 
     if not source.exists():
         raise FileNotFoundError(source)
@@ -401,7 +411,7 @@ def main() -> int:
     if not args.no_build:
         maybe_build(binary, source, args.arch, args.force_rebuild, root, args.hipcc_flag)
     elif not binary.exists():
-        raise FileNotFoundError(f"binary not found: {binary}")
+        raise FileNotFoundError(f"binary not found for --arch={args.arch}: {binary}")
 
     if args.trials <= 0:
         raise ValueError("--trials must be >= 1")
@@ -446,6 +456,12 @@ def main() -> int:
             cmd.append("--force-scalar-int8-io")
         if args.force_packed_int8_io:
             cmd.append("--force-packed-int8-io")
+        if args.force_isa_packed_int8_io:
+            cmd.append("--force-isa-packed-int8-io")
+        if args.force_ilp2_int8:
+            cmd.append("--force-ilp2-int8")
+        if args.force_convlike_int8:
+            cmd.append("--force-convlike-int8")
         if args.force_inloop_scale_bias:
             cmd.append("--force-inloop-scale-bias")
         if args.force_per_iter_requant:
@@ -500,6 +516,7 @@ def main() -> int:
             "arch": args.arch,
             "elements": args.elements,
             "threads": args.threads,
+            "items_per_thread": args.items_per_thread,
             "inner_int8": args.inner_int8,
             "inner_fp8": args.inner_fp8,
             "warmup_runs": args.warmup_runs,
@@ -512,6 +529,9 @@ def main() -> int:
             "force_runtime_inner_loops": args.force_runtime_inner_loops,
             "force_scalar_int8_io": args.force_scalar_int8_io,
             "force_packed_int8_io": args.force_packed_int8_io,
+            "force_isa_packed_int8_io": args.force_isa_packed_int8_io,
+            "force_ilp2_int8": args.force_ilp2_int8,
+            "force_convlike_int8": args.force_convlike_int8,
             "force_inloop_scale_bias": args.force_inloop_scale_bias,
             "force_per_iter_requant": args.force_per_iter_requant,
             "split_interior_edge": args.split_interior_edge,
@@ -524,6 +544,7 @@ def main() -> int:
             "force_mixed_int8_path": args.force_mixed_int8_path,
             "fp8_quantized_io": args.fp8_quantized_io,
             "hipcc_flags": args.hipcc_flag,
+            "binary_path": str(binary),
         },
         "trials": trial_records,
         "aggregate": aggregate,

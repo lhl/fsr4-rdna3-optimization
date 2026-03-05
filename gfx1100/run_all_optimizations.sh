@@ -3,7 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-REF="results/baseline-benchmark-20260305-185902.json"
+ARCH="gfx1100"
+REF="results/gfx1100-final-default-optimized-trials3.json"
 
 run() {
   local label="$1"
@@ -11,7 +12,7 @@ run() {
   echo
   echo "===== ${label} ====="
   date -Iseconds
-  mamba run -n therock ./baseline-benchmark.py "$@"
+  mamba run -n therock ./baseline-benchmark.py --arch "$ARCH" "$@"
 }
 
 # Common long-run protocol knobs.

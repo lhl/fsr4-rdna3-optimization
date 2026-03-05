@@ -1,0 +1,21 @@
+{
+  "timestamp_utc": "2026-03-05T16:08:46.434812+00:00",
+  "status": "blocked",
+  "task": "P3 FP8 WMMA/MFMA microkernel prototype",
+  "probe_source": "results/todo-p3-fp8-mfma-probe.cpp",
+  "compile_attempts": [
+    {
+      "arch": "gfx1100",
+      "status": "failed",
+      "log_file": "results/todo-p3-fp8-mfma-probe-gfx1100.log",
+      "error_contains": "needs target feature fp8-insts"
+    },
+    {
+      "arch": "gfx1151",
+      "status": "failed",
+      "log_file": "results/todo-p3-fp8-mfma-probe-gfx1151.log",
+      "error_contains": "needs target feature fp8-insts"
+    }
+  ],
+  "note": "Current HIP/clang toolchain does not expose FP8 MFMA builtins for gfx1100/gfx1151 targets; rocWMMA FP8 WMMA path in installed headers is gated for gfx12 builtins."
+}

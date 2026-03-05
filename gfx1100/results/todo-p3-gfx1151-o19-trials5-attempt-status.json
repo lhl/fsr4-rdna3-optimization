@@ -1,0 +1,8 @@
+{
+  "timestamp_utc": "2026-03-05T16:07:52.378206+00:00",
+  "status": "failed",
+  "exit_code": 1,
+  "arch": "gfx1151",
+  "note": "Cross-validate O19 (fp8_quantized_io) on gfx1151 with trials=5 from gfx1100 host",
+  "log_file": "results/todo-p3-gfx1151-o19-trials5-attempt.log"
+}

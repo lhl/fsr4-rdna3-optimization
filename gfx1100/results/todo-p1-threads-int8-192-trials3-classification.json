@@ -1,0 +1,24 @@
+{
+  "overall": "unsure",
+  "metric": "median",
+  "min_uncertainty_pct": 3.0,
+  "cv_scale": 0.5,
+  "per_mode": [
+    {
+      "mode": "int8",
+      "metric": "median",
+      "reference_ms": 0.007715666666666667,
+      "current_ms": 0.007769,
+      "delta_ms": -5.3333333333333184e-05,
+      "delta_pct": -0.691234285220545,
+      "uncertainty_ms": 0.00023147,
+      "uncertainty_pct": 3.0,
+      "verdict": "unsure",
+      "reference_trials": 3,
+      "current_trials": 3
+    }
+  ],
+  "timestamp_utc": "2026-03-05T14:08:08.138725+00:00",
+  "reference_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/gfx1100-final-default-optimized-trials3.json",
+  "current_stats": "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/results/todo-p1-threads-int8-192-trials3.json"
+}

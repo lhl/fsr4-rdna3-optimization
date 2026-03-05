@@ -14,6 +14,14 @@
 #include <string>
 #include <vector>
 
+#ifndef ASSUME_ALIGNED_HOT_PTRS
+#define ASSUME_ALIGNED_HOT_PTRS 0
+#endif
+
+#ifndef ENABLE_ISA_SDOT4_VARIANT
+#define ENABLE_ISA_SDOT4_VARIANT 0
+#endif
+
 #define HIP_CHECK(cmd)                                                                     \
   do {                                                                                     \
     hipError_t err__ = (cmd);                                                              \
@@ -31,6 +39,9 @@ struct Config {
   int items_per_thread = 1;
   bool force_runtime_inner_loops = false;
   bool force_scalar_int8_io = true;
+  bool force_isa_packed_int8_io = false;
+  bool force_ilp2_int8 = false;
+  bool force_convlike_int8 = false;
   bool force_inloop_scale_bias = false;
   bool force_per_iter_requant = false;
   bool split_interior_edge = false;
@@ -99,6 +110,9 @@ static void usage(const char* argv0) {
             << "  --force-runtime-inner-loops\n"
             << "  --force-scalar-int8-io\n"
             << "  --force-packed-int8-io\n"
+            << "  --force-isa-packed-int8-io\n"
+            << "  --force-ilp2-int8\n"
+            << "  --force-convlike-int8\n"
             << "  --force-inloop-scale-bias\n"
             << "  --force-per-iter-requant\n"
             << "  --split-interior-edge\n"
@@ -156,8 +170,21 @@ static Config parse_args(int argc, char** argv) {
       cfg.force_runtime_inner_loops = true;
     } else if (arg == "--force-scalar-int8-io") {
       cfg.force_scalar_int8_io = true;
+      cfg.force_isa_packed_int8_io = false;
     } else if (arg == "--force-packed-int8-io") {
       cfg.force_scalar_int8_io = false;
+      cfg.force_isa_packed_int8_io = false;
+      cfg.force_ilp2_int8 = false;
+    } else if (arg == "--force-isa-packed-int8-io") {
+      cfg.force_scalar_int8_io = false;
+      cfg.force_isa_packed_int8_io = true;
+      cfg.force_ilp2_int8 = false;
+    } else if (arg == "--force-ilp2-int8") {
+      cfg.force_ilp2_int8 = true;
+      cfg.force_scalar_int8_io = true;
+      cfg.force_isa_packed_int8_io = false;
+    } else if (arg == "--force-convlike-int8") {
+      cfg.force_convlike_int8 = true;
     } else if (arg == "--force-inloop-scale-bias") {
       cfg.force_inloop_scale_bias = true;
     } else if (arg == "--force-per-iter-requant") {
@@ -285,8 +312,15 @@ static Stats compute_stats(const std::vector<float>& samples, double elapsed_sec
 }
 
 template <int INNER_OPS>
-__global__ void int8_dot4_kernel_unrolled(const int8_t* a, const int8_t* b, int32_t* out,
-                                          int n_vec4, int items_per_thread) {
+__global__ void int8_dot4_kernel_unrolled(const int8_t* __restrict__ a,
+                                          const int8_t* __restrict__ b,
+                                          int32_t* __restrict__ out, int n_vec4,
+                                          int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
   int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
   const char4* a4 = reinterpret_cast<const char4*>(a);
   const char4* b4 = reinterpret_cast<const char4*>(b);
@@ -313,8 +347,15 @@ __global__ void int8_dot4_kernel_unrolled(const int8_t* a, const int8_t* b, int3
 }
 
 template <int INNER_OPS>
-__global__ void int8_dot4_kernel_unrolled_scalar(const int8_t* a, const int8_t* b, int32_t* out,
-                                                 int n_vec4, int items_per_thread) {
+__global__ void int8_dot4_kernel_unrolled_scalar(const int8_t* __restrict__ a,
+                                                 const int8_t* __restrict__ b,
+                                                 int32_t* __restrict__ out, int n_vec4,
+                                                 int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
   int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
 
   for (int item = 0; item < items_per_thread; ++item) {
@@ -345,8 +386,15 @@ __global__ void int8_dot4_kernel_unrolled_scalar(const int8_t* a, const int8_t* 
   }
 }
 
-__global__ void int8_dot4_kernel_runtime(const int8_t* a, const int8_t* b, int32_t* out, int n_vec4,
-                                         int inner_ops, int items_per_thread) {
+__global__ void int8_dot4_kernel_runtime(const int8_t* __restrict__ a,
+                                         const int8_t* __restrict__ b,
+                                         int32_t* __restrict__ out, int n_vec4, int inner_ops,
+                                         int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
   int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
   const char4* a4 = reinterpret_cast<const char4*>(a);
   const char4* b4 = reinterpret_cast<const char4*>(b);
@@ -371,8 +419,15 @@ __global__ void int8_dot4_kernel_runtime(const int8_t* a, const int8_t* b, int32
   }
 }
 
-__global__ void int8_dot4_kernel_runtime_scalar(const int8_t* a, const int8_t* b, int32_t* out,
-                                                int n_vec4, int inner_ops, int items_per_thread) {
+__global__ void int8_dot4_kernel_runtime_scalar(const int8_t* __restrict__ a,
+                                                const int8_t* __restrict__ b,
+                                                int32_t* __restrict__ out, int n_vec4,
+                                                int inner_ops, int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
   int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
 
   for (int item = 0; item < items_per_thread; ++item) {
@@ -398,6 +453,370 @@ __global__ void int8_dot4_kernel_runtime_scalar(const int8_t* a, const int8_t* b
       bv1 -= 1;
     }
 
+    out[idx] = acc;
+  }
+}
+
+__device__ __forceinline__ uint32_t bump_low_byte(uint32_t x) {
+  return (x & 0xFFFFFF00u) | ((x + 1u) & 0xFFu);
+}
+
+__device__ __forceinline__ uint32_t dec_byte1(uint32_t x) {
+  const uint32_t b1 = ((x >> 8) - 1u) & 0xFFu;
+  return (x & 0xFFFF00FFu) | (b1 << 8);
+}
+
+template <int INNER_OPS>
+__global__ void int8_dot4_kernel_unrolled_sdot4(
+    const int8_t* __restrict__ a, const int8_t* __restrict__ b, int32_t* __restrict__ out,
+    int n_vec4, int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
+  int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
+  const uint32_t* a32 = reinterpret_cast<const uint32_t*>(a);
+  const uint32_t* b32 = reinterpret_cast<const uint32_t*>(b);
+
+  for (int item = 0; item < items_per_thread; ++item) {
+    int idx = idx0 + item;
+    if (idx >= n_vec4) {
+      break;
+    }
+
+    uint32_t av = a32[idx];
+    uint32_t bv = b32[idx];
+    int32_t acc = 0;
+
+#pragma unroll
+    for (int i = 0; i < INNER_OPS; ++i) {
+#if ENABLE_ISA_SDOT4_VARIANT
+      acc = __builtin_amdgcn_sdot4(static_cast<int>(av), static_cast<int>(bv), acc, false);
+#else
+      const int a0 = static_cast<int>(static_cast<int8_t>(av & 0xFFu));
+      const int a1 = static_cast<int>(static_cast<int8_t>((av >> 8) & 0xFFu));
+      const int a2 = static_cast<int>(static_cast<int8_t>((av >> 16) & 0xFFu));
+      const int a3 = static_cast<int>(static_cast<int8_t>((av >> 24) & 0xFFu));
+      const int b0 = static_cast<int>(static_cast<int8_t>(bv & 0xFFu));
+      const int b1 = static_cast<int>(static_cast<int8_t>((bv >> 8) & 0xFFu));
+      const int b2 = static_cast<int>(static_cast<int8_t>((bv >> 16) & 0xFFu));
+      const int b3 = static_cast<int>(static_cast<int8_t>((bv >> 24) & 0xFFu));
+      acc += a0 * b0 + a1 * b1 + a2 * b2 + a3 * b3;
+#endif
+      av = bump_low_byte(av);
+      bv = dec_byte1(bv);
+    }
+    out[idx] = acc;
+  }
+}
+
+__global__ void int8_dot4_kernel_runtime_sdot4(
+    const int8_t* __restrict__ a, const int8_t* __restrict__ b, int32_t* __restrict__ out,
+    int n_vec4, int inner_ops, int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
+  int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
+  const uint32_t* a32 = reinterpret_cast<const uint32_t*>(a);
+  const uint32_t* b32 = reinterpret_cast<const uint32_t*>(b);
+
+  for (int item = 0; item < items_per_thread; ++item) {
+    int idx = idx0 + item;
+    if (idx >= n_vec4) {
+      break;
+    }
+
+    uint32_t av = a32[idx];
+    uint32_t bv = b32[idx];
+    int32_t acc = 0;
+    for (int i = 0; i < inner_ops; ++i) {
+#if ENABLE_ISA_SDOT4_VARIANT
+      acc = __builtin_amdgcn_sdot4(static_cast<int>(av), static_cast<int>(bv), acc, false);
+#else
+      const int a0 = static_cast<int>(static_cast<int8_t>(av & 0xFFu));
+      const int a1 = static_cast<int>(static_cast<int8_t>((av >> 8) & 0xFFu));
+      const int a2 = static_cast<int>(static_cast<int8_t>((av >> 16) & 0xFFu));
+      const int a3 = static_cast<int>(static_cast<int8_t>((av >> 24) & 0xFFu));
+      const int b0 = static_cast<int>(static_cast<int8_t>(bv & 0xFFu));
+      const int b1 = static_cast<int>(static_cast<int8_t>((bv >> 8) & 0xFFu));
+      const int b2 = static_cast<int>(static_cast<int8_t>((bv >> 16) & 0xFFu));
+      const int b3 = static_cast<int>(static_cast<int8_t>((bv >> 24) & 0xFFu));
+      acc += a0 * b0 + a1 * b1 + a2 * b2 + a3 * b3;
+#endif
+      av = bump_low_byte(av);
+      bv = dec_byte1(bv);
+    }
+    out[idx] = acc;
+  }
+}
+
+template <int INNER_OPS>
+__global__ void int8_dot4_kernel_unrolled_scalar_ilp2(const int8_t* __restrict__ a,
+                                                       const int8_t* __restrict__ b,
+                                                       int32_t* __restrict__ out, int n_vec4,
+                                                       int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
+  int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
+
+  for (int item = 0; item < items_per_thread; ++item) {
+    int idx = idx0 + item;
+    if (idx >= n_vec4) {
+      break;
+    }
+
+    int base = idx * 4;
+    int av0 = static_cast<int>(a[base + 0]);
+    int av1 = static_cast<int>(a[base + 1]);
+    int av2 = static_cast<int>(a[base + 2]);
+    int av3 = static_cast<int>(a[base + 3]);
+    int bv0 = static_cast<int>(b[base + 0]);
+    int bv1 = static_cast<int>(b[base + 1]);
+    int bv2 = static_cast<int>(b[base + 2]);
+    int bv3 = static_cast<int>(b[base + 3]);
+    int32_t acc0 = 0;
+    int32_t acc1 = 0;
+
+    int i = 0;
+#pragma unroll
+    for (; i + 1 < INNER_OPS; i += 2) {
+      acc0 += av0 * bv0 + av1 * bv1 + av2 * bv2 + av3 * bv3;
+      const int av0_next = av0 + 1;
+      const int bv1_next = bv1 - 1;
+      acc1 += av0_next * bv0 + av1 * bv1_next + av2 * bv2 + av3 * bv3;
+      av0 = av0_next + 1;
+      bv1 = bv1_next - 1;
+    }
+#pragma unroll
+    for (; i < INNER_OPS; ++i) {
+      acc0 += av0 * bv0 + av1 * bv1 + av2 * bv2 + av3 * bv3;
+      av0 += 1;
+      bv1 -= 1;
+    }
+
+    out[idx] = acc0 + acc1;
+  }
+}
+
+__global__ void int8_dot4_kernel_runtime_scalar_ilp2(const int8_t* __restrict__ a,
+                                                      const int8_t* __restrict__ b,
+                                                      int32_t* __restrict__ out, int n_vec4,
+                                                      int inner_ops, int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
+  int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
+
+  for (int item = 0; item < items_per_thread; ++item) {
+    int idx = idx0 + item;
+    if (idx >= n_vec4) {
+      break;
+    }
+
+    int base = idx * 4;
+    int av0 = static_cast<int>(a[base + 0]);
+    int av1 = static_cast<int>(a[base + 1]);
+    int av2 = static_cast<int>(a[base + 2]);
+    int av3 = static_cast<int>(a[base + 3]);
+    int bv0 = static_cast<int>(b[base + 0]);
+    int bv1 = static_cast<int>(b[base + 1]);
+    int bv2 = static_cast<int>(b[base + 2]);
+    int bv3 = static_cast<int>(b[base + 3]);
+    int32_t acc0 = 0;
+    int32_t acc1 = 0;
+
+    int i = 0;
+    for (; i + 1 < inner_ops; i += 2) {
+      acc0 += av0 * bv0 + av1 * bv1 + av2 * bv2 + av3 * bv3;
+      const int av0_next = av0 + 1;
+      const int bv1_next = bv1 - 1;
+      acc1 += av0_next * bv0 + av1 * bv1_next + av2 * bv2 + av3 * bv3;
+      av0 = av0_next + 1;
+      bv1 = bv1_next - 1;
+    }
+    for (; i < inner_ops; ++i) {
+      acc0 += av0 * bv0 + av1 * bv1 + av2 * bv2 + av3 * bv3;
+      av0 += 1;
+      bv1 -= 1;
+    }
+
+    out[idx] = acc0 + acc1;
+  }
+}
+
+template <int INNER_OPS>
+__global__ void int8_convlike_kernel_shared_weight(const int8_t* __restrict__ a,
+                                                    const int8_t* __restrict__ b,
+                                                    int32_t* __restrict__ out, int n_vec4,
+                                                    int items_per_thread, bool lds_stage_weight,
+                                                    bool lds_padding, bool lds_double_buffer) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
+  int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
+
+  extern __shared__ int8_t smem[];
+  const int lds_stride = lds_padding ? 5 : 4;
+  int8_t* s_w0 = smem;
+  int8_t* s_w1 = lds_double_buffer ? (smem + lds_stride) : nullptr;
+
+  const int weight_idx0 = blockIdx.x % n_vec4;
+  const int weight_base0 = weight_idx0 * 4;
+  int weight_idx1 = weight_idx0;
+  int weight_base1 = weight_base0;
+  if (lds_double_buffer) {
+    weight_idx1 = (weight_idx0 + 1) % n_vec4;
+    weight_base1 = weight_idx1 * 4;
+  }
+
+  if (lds_stage_weight) {
+    if (threadIdx.x < 4) {
+      s_w0[threadIdx.x] = b[weight_base0 + threadIdx.x];
+      if (lds_double_buffer) {
+        s_w1[threadIdx.x] = b[weight_base1 + threadIdx.x];
+      }
+    }
+    if (lds_padding && threadIdx.x == 0) {
+      s_w0[4] = 0;
+      if (lds_double_buffer) {
+        s_w1[4] = 0;
+      }
+    }
+    __syncthreads();
+  }
+
+  for (int item = 0; item < items_per_thread; ++item) {
+    int idx = idx0 + item;
+    if (idx >= n_vec4) {
+      break;
+    }
+
+    const int base = idx * 4;
+    int av0 = static_cast<int>(a[base + 0]);
+    int av1 = static_cast<int>(a[base + 1]);
+    int av2 = static_cast<int>(a[base + 2]);
+    int av3 = static_cast<int>(a[base + 3]);
+    int32_t acc = 0;
+
+    int bv0, bv1, bv2, bv3;
+    if (lds_stage_weight) {
+      bv0 = static_cast<int>(s_w0[0]);
+      bv1 = static_cast<int>(s_w0[1]);
+      bv2 = static_cast<int>(s_w0[2]);
+      bv3 = static_cast<int>(s_w0[3]);
+    } else {
+      bv0 = static_cast<int>(b[weight_base0 + 0]);
+      bv1 = static_cast<int>(b[weight_base0 + 1]);
+      bv2 = static_cast<int>(b[weight_base0 + 2]);
+      bv3 = static_cast<int>(b[weight_base0 + 3]);
+    }
+
+#pragma unroll
+    for (int i = 0; i < INNER_OPS; ++i) {
+      if (lds_double_buffer && lds_stage_weight && (i & 1)) {
+        const int8_t* src = s_w1;
+        bv0 = static_cast<int>(src[0]);
+        bv1 = static_cast<int>(src[1]);
+        bv2 = static_cast<int>(src[2]);
+        bv3 = static_cast<int>(src[3]);
+      }
+      acc += av0 * bv0 + av1 * bv1 + av2 * bv2 + av3 * bv3;
+      av0 += 1;
+      bv1 -= 1;
+    }
+    out[idx] = acc;
+  }
+}
+
+__global__ void int8_convlike_kernel_shared_weight_runtime(
+    const int8_t* __restrict__ a, const int8_t* __restrict__ b, int32_t* __restrict__ out,
+    int n_vec4, int inner_ops, int items_per_thread, bool lds_stage_weight, bool lds_padding,
+    bool lds_double_buffer) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const int8_t*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const int8_t*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<int32_t*>(__builtin_assume_aligned(out, 4));
+#endif
+  int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
+
+  extern __shared__ int8_t smem[];
+  const int lds_stride = lds_padding ? 5 : 4;
+  int8_t* s_w0 = smem;
+  int8_t* s_w1 = lds_double_buffer ? (smem + lds_stride) : nullptr;
+
+  const int weight_idx0 = blockIdx.x % n_vec4;
+  const int weight_base0 = weight_idx0 * 4;
+  int weight_idx1 = weight_idx0;
+  int weight_base1 = weight_base0;
+  if (lds_double_buffer) {
+    weight_idx1 = (weight_idx0 + 1) % n_vec4;
+    weight_base1 = weight_idx1 * 4;
+  }
+
+  if (lds_stage_weight) {
+    if (threadIdx.x < 4) {
+      s_w0[threadIdx.x] = b[weight_base0 + threadIdx.x];
+      if (lds_double_buffer) {
+        s_w1[threadIdx.x] = b[weight_base1 + threadIdx.x];
+      }
+    }
+    if (lds_padding && threadIdx.x == 0) {
+      s_w0[4] = 0;
+      if (lds_double_buffer) {
+        s_w1[4] = 0;
+      }
+    }
+    __syncthreads();
+  }
+
+  for (int item = 0; item < items_per_thread; ++item) {
+    int idx = idx0 + item;
+    if (idx >= n_vec4) {
+      break;
+    }
+
+    const int base = idx * 4;
+    int av0 = static_cast<int>(a[base + 0]);
+    int av1 = static_cast<int>(a[base + 1]);
+    int av2 = static_cast<int>(a[base + 2]);
+    int av3 = static_cast<int>(a[base + 3]);
+    int32_t acc = 0;
+
+    int bv0, bv1, bv2, bv3;
+    if (lds_stage_weight) {
+      bv0 = static_cast<int>(s_w0[0]);
+      bv1 = static_cast<int>(s_w0[1]);
+      bv2 = static_cast<int>(s_w0[2]);
+      bv3 = static_cast<int>(s_w0[3]);
+    } else {
+      bv0 = static_cast<int>(b[weight_base0 + 0]);
+      bv1 = static_cast<int>(b[weight_base0 + 1]);
+      bv2 = static_cast<int>(b[weight_base0 + 2]);
+      bv3 = static_cast<int>(b[weight_base0 + 3]);
+    }
+
+    for (int i = 0; i < inner_ops; ++i) {
+      if (lds_double_buffer && lds_stage_weight && (i & 1)) {
+        const int8_t* src = s_w1;
+        bv0 = static_cast<int>(src[0]);
+        bv1 = static_cast<int>(src[1]);
+        bv2 = static_cast<int>(src[2]);
+        bv3 = static_cast<int>(src[3]);
+      }
+      acc += av0 * bv0 + av1 * bv1 + av2 * bv2 + av3 * bv3;
+      av0 += 1;
+      bv1 -= 1;
+    }
     out[idx] = acc;
   }
 }
@@ -640,8 +1059,13 @@ __global__ void int8_adjacent_pass_kernel(const int32_t* in, int32_t* out, int n
 }
 
 template <int INNER_OPS>
-__global__ void fp8_fma_kernel_unrolled(const float* a, const float* b, float* out, int n,
-                                        int items_per_thread) {
+__global__ void fp8_fma_kernel_unrolled(const float* __restrict__ a, const float* __restrict__ b,
+                                        float* __restrict__ out, int n, int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const float*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const float*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<float*>(__builtin_assume_aligned(out, 4));
+#endif
   int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
 
   for (int item = 0; item < items_per_thread; ++item) {
@@ -670,8 +1094,14 @@ __global__ void fp8_fma_kernel_unrolled(const float* a, const float* b, float* o
   }
 }
 
-__global__ void fp8_fma_kernel_runtime(const float* a, const float* b, float* out, int n,
-                                       int inner_ops, int items_per_thread) {
+__global__ void fp8_fma_kernel_runtime(const float* __restrict__ a, const float* __restrict__ b,
+                                       float* __restrict__ out, int n, int inner_ops,
+                                       int items_per_thread) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const float*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const float*>(__builtin_assume_aligned(b, 4));
+  out = static_cast<float*>(__builtin_assume_aligned(out, 4));
+#endif
   int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
 
   for (int item = 0; item < items_per_thread; ++item) {
@@ -701,10 +1131,20 @@ __global__ void fp8_fma_kernel_runtime(const float* a, const float* b, float* ou
 }
 
 template <int INNER_OPS, bool CHECK_BOUNDS>
-__global__ void fp8_fma_kernel_unrolled_general(const float* a, const float* b,
-                                                const uint8_t* a_q, const uint8_t* b_q, float* out,
-                                                int n, int items_per_thread,
-                                                bool use_quantized_io, bool force_per_iter_requant) {
+__global__ void fp8_fma_kernel_unrolled_general(const float* __restrict__ a,
+                                                const float* __restrict__ b,
+                                                const uint8_t* __restrict__ a_q,
+                                                const uint8_t* __restrict__ b_q,
+                                                float* __restrict__ out, int n,
+                                                int items_per_thread, bool use_quantized_io,
+                                                bool force_per_iter_requant) {
+#if ASSUME_ALIGNED_HOT_PTRS
+  a = static_cast<const float*>(__builtin_assume_aligned(a, 4));
+  b = static_cast<const float*>(__builtin_assume_aligned(b, 4));
+  a_q = static_cast<const uint8_t*>(__builtin_assume_aligned(a_q, 1));
+  b_q = static_cast<const uint8_t*>(__builtin_assume_aligned(b_q, 1));
+  out = static_cast<float*>(__builtin_assume_aligned(out, 4));
+#endif
   int idx0 = (blockIdx.x * blockDim.x + threadIdx.x) * items_per_thread;
 
   for (int item = 0; item < items_per_thread; ++item) {
@@ -847,6 +1287,14 @@ static std::pair<Stats, double> run_int8(const Config& cfg) {
       lds_shared_bytes += vectors_per_block * lds_stride * sizeof(int8_t);
     }
   }
+  size_t conv_shared_bytes = 0;
+  if (cfg.force_convlike_int8 && cfg.lds_stage_weight) {
+    const int lds_stride = cfg.lds_padding ? 5 : 4;
+    conv_shared_bytes = static_cast<size_t>(lds_stride) * sizeof(int8_t);
+    if (cfg.lds_double_buffer) {
+      conv_shared_bytes *= 2;
+    }
+  }
 
   auto launch_scalar_unrolled_checked = [&](const int8_t* a_ptr, const int8_t* b_ptr, int32_t* out_ptr,
                                             int n_local, dim3 grid_local) {
@@ -942,25 +1390,125 @@ static std::pair<Stats, double> run_int8(const Config& cfg) {
     }
   };
 
+  auto launch_scalar_ilp2 = [&](const int8_t* a_ptr, const int8_t* b_ptr, int32_t* out_ptr,
+                                int n_local, dim3 grid_local) {
+    switch (cfg.inner_int8) {
+      case 8:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_scalar_ilp2<8>, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.items_per_thread);
+        break;
+      case 16:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_scalar_ilp2<16>, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.items_per_thread);
+        break;
+      case 32:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_scalar_ilp2<32>, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.items_per_thread);
+        break;
+      case 64:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_scalar_ilp2<64>, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.items_per_thread);
+        break;
+      default:
+        hipLaunchKernelGGL(int8_dot4_kernel_runtime_scalar_ilp2, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.inner_int8, cfg.items_per_thread);
+        break;
+    }
+  };
+
+  auto launch_isa_packed = [&](const int8_t* a_ptr, const int8_t* b_ptr, int32_t* out_ptr,
+                               int n_local, dim3 grid_local) {
+    switch (cfg.inner_int8) {
+      case 8:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_sdot4<8>, grid_local, block, 0, 0, a_ptr, b_ptr,
+                           out_ptr, n_local, cfg.items_per_thread);
+        break;
+      case 16:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_sdot4<16>, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.items_per_thread);
+        break;
+      case 32:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_sdot4<32>, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.items_per_thread);
+        break;
+      case 64:
+        hipLaunchKernelGGL(int8_dot4_kernel_unrolled_sdot4<64>, grid_local, block, 0, 0, a_ptr,
+                           b_ptr, out_ptr, n_local, cfg.items_per_thread);
+        break;
+      default:
+        hipLaunchKernelGGL(int8_dot4_kernel_runtime_sdot4, grid_local, block, 0, 0, a_ptr, b_ptr,
+                           out_ptr, n_local, cfg.inner_int8, cfg.items_per_thread);
+        break;
+    }
+  };
+
+  auto launch_convlike = [&](const int8_t* a_ptr, const int8_t* b_ptr, int32_t* out_ptr,
+                             int n_local, dim3 grid_local) {
+    switch (cfg.inner_int8) {
+      case 8:
+        hipLaunchKernelGGL(int8_convlike_kernel_shared_weight<8>, grid_local, block, conv_shared_bytes,
+                           0, a_ptr, b_ptr, out_ptr, n_local, cfg.items_per_thread,
+                           cfg.lds_stage_weight, cfg.lds_padding, cfg.lds_double_buffer);
+        break;
+      case 16:
+        hipLaunchKernelGGL(int8_convlike_kernel_shared_weight<16>, grid_local, block, conv_shared_bytes,
+                           0, a_ptr, b_ptr, out_ptr, n_local, cfg.items_per_thread,
+                           cfg.lds_stage_weight, cfg.lds_padding, cfg.lds_double_buffer);
+        break;
+      case 32:
+        hipLaunchKernelGGL(int8_convlike_kernel_shared_weight<32>, grid_local, block, conv_shared_bytes,
+                           0, a_ptr, b_ptr, out_ptr, n_local, cfg.items_per_thread,
+                           cfg.lds_stage_weight, cfg.lds_padding, cfg.lds_double_buffer);
+        break;
+      case 64:
+        hipLaunchKernelGGL(int8_convlike_kernel_shared_weight<64>, grid_local, block, conv_shared_bytes,
+                           0, a_ptr, b_ptr, out_ptr, n_local, cfg.items_per_thread,
+                           cfg.lds_stage_weight, cfg.lds_padding, cfg.lds_double_buffer);
+        break;
+      default:
+        hipLaunchKernelGGL(int8_convlike_kernel_shared_weight_runtime, grid_local, block,
+                           conv_shared_bytes, 0, a_ptr, b_ptr, out_ptr, n_local, cfg.inner_int8,
+                           cfg.items_per_thread, cfg.lds_stage_weight, cfg.lds_padding,
+                           cfg.lds_double_buffer);
+        break;
+    }
+  };
+
   auto launch_int8_core = [&](int32_t* out_ptr) {
+    if (cfg.force_convlike_int8) {
+      launch_convlike(d_a, d_b, out_ptr, n_vec4, grid);
+      return;
+    }
+
     if (cfg.force_runtime_inner_loops) {
       if (cfg.force_scalar_int8_io) {
-        hipLaunchKernelGGL(int8_dot4_kernel_runtime_scalar, grid, block, 0, 0, d_a, d_b, out_ptr,
-                           n_vec4, cfg.inner_int8, cfg.items_per_thread);
+        if (cfg.force_ilp2_int8) {
+          hipLaunchKernelGGL(int8_dot4_kernel_runtime_scalar_ilp2, grid, block, 0, 0, d_a, d_b,
+                             out_ptr, n_vec4, cfg.inner_int8, cfg.items_per_thread);
+        } else {
+          hipLaunchKernelGGL(int8_dot4_kernel_runtime_scalar, grid, block, 0, 0, d_a, d_b, out_ptr,
+                             n_vec4, cfg.inner_int8, cfg.items_per_thread);
+        }
       } else {
-        hipLaunchKernelGGL(int8_dot4_kernel_runtime, grid, block, 0, 0, d_a, d_b, out_ptr, n_vec4,
-                           cfg.inner_int8, cfg.items_per_thread);
+        if (cfg.force_isa_packed_int8_io) {
+          hipLaunchKernelGGL(int8_dot4_kernel_runtime_sdot4, grid, block, 0, 0, d_a, d_b, out_ptr,
+                             n_vec4, cfg.inner_int8, cfg.items_per_thread);
+        } else {
+          hipLaunchKernelGGL(int8_dot4_kernel_runtime, grid, block, 0, 0, d_a, d_b, out_ptr, n_vec4,
+                             cfg.inner_int8, cfg.items_per_thread);
+        }
       }
       return;
     }
 
-    if (cfg.force_scalar_int8_io && needs_advanced_scalar) {
+    if (cfg.force_scalar_int8_io && !cfg.force_ilp2_int8 && needs_advanced_scalar) {
       launch_scalar_advanced(d_a, d_b, out_ptr, n_vec4, grid, d_scales, d_biases);
       return;
     }
 
     const bool can_split_scalar = cfg.split_interior_edge && cfg.force_scalar_int8_io &&
-                                  !cfg.force_runtime_inner_loops && !needs_advanced_scalar &&
+                                  !cfg.force_runtime_inner_loops && !cfg.force_ilp2_int8 &&
+                                  !needs_advanced_scalar &&
                                   (cfg.inner_int8 == 8 || cfg.inner_int8 == 16 ||
                                    cfg.inner_int8 == 32 || cfg.inner_int8 == 64);
     if (can_split_scalar) {
@@ -975,6 +1523,15 @@ static std::pair<Stats, double> run_int8(const Config& cfg) {
         launch_scalar_unrolled_checked(d_a + interior_vec * 4, d_b + interior_vec * 4,
                                        out_ptr + interior_vec, tail_vec, grid_tail);
       }
+      return;
+    }
+
+    if (cfg.force_scalar_int8_io && cfg.force_ilp2_int8) {
+      launch_scalar_ilp2(d_a, d_b, out_ptr, n_vec4, grid);
+      return;
+    }
+    if (!cfg.force_scalar_int8_io && cfg.force_isa_packed_int8_io) {
+      launch_isa_packed(d_a, d_b, out_ptr, n_vec4, grid);
       return;
     }
 
@@ -1383,6 +1940,9 @@ int main(int argc, char** argv) {
             << " items_per_thread=" << cfg.items_per_thread
             << " force_runtime_inner_loops=" << (cfg.force_runtime_inner_loops ? 1 : 0)
             << " force_scalar_int8_io=" << (cfg.force_scalar_int8_io ? 1 : 0)
+            << " force_isa_packed_int8_io=" << (cfg.force_isa_packed_int8_io ? 1 : 0)
+            << " force_ilp2_int8=" << (cfg.force_ilp2_int8 ? 1 : 0)
+            << " force_convlike_int8=" << (cfg.force_convlike_int8 ? 1 : 0)
             << " force_inloop_scale_bias=" << (cfg.force_inloop_scale_bias ? 1 : 0)
             << " force_per_iter_requant=" << (cfg.force_per_iter_requant ? 1 : 0)
             << " split_interior_edge=" << (cfg.split_interior_edge ? 1 : 0)

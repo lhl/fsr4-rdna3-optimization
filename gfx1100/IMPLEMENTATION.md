@@ -1,5 +1,70 @@
 # IMPLEMENTATION (gfx1100)
 
+## 2026-03-06: Full TODO Sweep Closure + Final Policy Integration
+- Goal:
+  - Finish all queued `gfx1100/TODO.md` items, keep only proven wins, and publish final numbers/status.
+- Core execution:
+  - Continued and completed `./run_todo_p2.sh` (P2 queue).
+  - Added recovery/resume path for failed profiling tail:
+    - `./run_todo_p2_resume_after_reps.sh` (profiling + disassembly tail-only recovery).
+- Script/tooling updates:
+  - `gfx1100/run_todo_p2.sh`
+    - fixed `rocprofv3` app separator usage (`--`)
+    - switched profiling flow to:
+      - `--kernel-trace --stats --summary`
+      - csv outputs per candidate
+      - status-json emission instead of hard-failing whole batch
+    - fixed disassembly regex escaping for instruction counts
+    - added `todo-p2-disasm-int8-kernels-compare.json` generation for scalar/packed kernel-shape comparison
+  - Added final-policy runner:
+    - `gfx1100/run_final_policy.sh`
+- Final integrated policy validation commands:
+  - INT8:
+    - `mamba run -n therock ./baseline-benchmark.py --arch gfx1100 --mode int8 --target-seconds 60 --min-runs 200 --reps-per-run 200 --elements 262144 --inner-int8 16 --threads 256 --items-per-thread 4 --fp8-quantized-io --trials 5 --reference-stats results/gfx1100-final-default-optimized-trials3.json --stats-out results/gfx1100-final-policy-int8-items4-inner16-trials5.json --classification-out results/gfx1100-final-policy-int8-items4-inner16-trials5-classification.json`
+  - FP8:
+    - `mamba run -n therock ./baseline-benchmark.py --arch gfx1100 --mode fp8 --target-seconds 60 --min-runs 200 --reps-per-run 200 --elements 262144 --inner-fp8 8 --threads 256 --items-per-thread 1 --fp8-quantized-io --trials 5 --reference-stats results/gfx1100-final-default-optimized-trials3.json --stats-out results/gfx1100-final-policy-fp8-items1-inner8-trials5.json --classification-out results/gfx1100-final-policy-fp8-items1-inner8-trials5-classification.json`
+- Final integrated results:
+  - INT8 final policy:
+    - mean-of-mean `0.006834 ms`
+    - mean-cv `1.412%`
+    - classification verdict `keep` (`+11.484%` median vs canonical reference)
+  - FP8 final policy:
+    - mean-of-mean `0.010006 ms`
+    - mean-cv `1.568%`
+    - classification verdict `keep` (`+6.124%` median vs canonical reference)
+  - Combined summary:
+    - `results/gfx1100-final-policy-summary.json`
+    - canonical total mean `0.018353 ms` -> final policy total mean `0.016839 ms` (`+8.249%`)
+- P2 notable conclusions:
+  - ISA builtin packed INT8 probe:
+    - `__builtin_amdgcn_sdot4` compile attempt fails on gfx1100 (`dot1-insts` feature gate)
+    - artifact: `results/todo-p2-isa-builtin-sdot4-attempt-status.json`
+  - Assume-aligned hot pointers:
+    - `results/todo-p2-assume-aligned-hot-ptrs-trials3-classification.json` -> `unsure`
+  - ILP2 INT8:
+    - `results/todo-p2-ilp2-int8-trials3-classification.json` -> `unsure`
+  - Conv-like + LDS stack:
+    - all variants `drop` (worst ~`-208.8%`)
+  - Packed+items=4 composition:
+    - `results/todo-p2-packed-items4-int8-trials3-classification.json` -> `unsure`/negative
+  - Reps-per-run sweep:
+    - `50` shows overhead inflation; `200/400` stable near canonical.
+  - ROCProfiler:
+    - initial `--stats`-only usage failed on this rocprofv3 build
+    - rerun with `--kernel-trace --stats --summary` succeeded
+    - kernel stats show fp8 inner=8 average kernel duration below fp8 inner=16 baseline
+- P3 closure:
+  - FP8 WMMA/MFMA prototype: blocked
+    - probe source/logs:
+      - `results/todo-p3-fp8-mfma-probe.cpp`
+      - `results/todo-p3-fp8-mfma-probe-gfx1100.log`
+      - `results/todo-p3-fp8-mfma-probe-gfx1151.log`
+    - status: `results/todo-p3-fp8-wmma-mfma-prototype-status.json`
+  - gfx1151 O19 trials=5 cross-validate on this host: blocked at runtime dispatch
+    - status/log:
+      - `results/todo-p3-gfx1151-o19-trials5-attempt-status.json`
+      - `results/todo-p3-gfx1151-o19-trials5-attempt.log`
+
 ## 2026-03-05: Bootstrap
 - Goal: replicate benchmark workflow on W7900 (`gfx1100`) in an isolated folder.
 - Scope: local harness copy, environment sanity checks, smoke benchmark, initial baseline run.

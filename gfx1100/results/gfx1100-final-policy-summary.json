@@ -1,0 +1,7 @@
+{
+  "reference_total_mean_ms": 0.018353333333333333,
+  "final_policy_total_mean_ms": 0.0168394,
+  "final_policy_total_delta_pct": 8.248819469669442,
+  "int8_mean_ms": 0.0068336000000000004,
+  "fp8_mean_ms": 0.0100058
+}

@@ -1,0 +1,4 @@
+"Name","Calls","TotalDurationNs","AverageNs","Percentage","MinNs","MaxNs","StdDev"
+"void fp8_fma_kernel_unrolled_general<16, true>(float const*, float const*, unsigned char const*, unsigned char const*, float*, int, int, bool, bool)",40020,324684600,8113.058471,100.00,6600,19360,1770.484601
+"__amd_rocclr_fillBufferAligned",1,9440,9440.000000,2.907e-03,9440,9440,0.00000000e+00
+"__amd_rocclr_copyBuffer",1,3400,3400.000000,1.047e-03,3400,3400,0.00000000e+00

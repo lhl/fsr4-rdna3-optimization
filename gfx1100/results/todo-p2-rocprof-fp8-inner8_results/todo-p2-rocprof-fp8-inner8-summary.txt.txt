@@ -1,0 +1,9 @@
+
+ROCPROFV3 SUMMARY:
+
+|                                                                        NAME                                                                         |     DOMAIN      |      CALLS      | DURATION (nsec) | AVERAGE (nsec)  | PERCENT (INC) |   MIN (nsec)    |   MAX (nsec)    |     STDDEV      |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|-----------------|-----------------|-----------------|---------------|-----------------|-----------------|-----------------|
+| void fp8_fma_kernel_unrolled_general<8, true>(float const*, float const*, unsigned char const*, unsigned char const*, float*, int, int, bool, bool) | KERNEL_DISPATCH |           40020 |       300921339 |       7.519e+03 |     99.995521 |            5840 |           18920 |       1.805e+03 |
+| __amd_rocclr_fillBufferAligned                                                                                                                      | KERNEL_DISPATCH |               1 |            9920 |       9.920e+03 |      0.003296 |            9920 |            9920 |       0.000e+00 |
+| __amd_rocclr_copyBuffer                                                                                                                             | KERNEL_DISPATCH |               1 |            3560 |       3.560e+03 |      0.001183 |            3560 |            3560 |       0.000e+00 |
+

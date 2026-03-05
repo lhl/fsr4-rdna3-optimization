@@ -1,0 +1,7 @@
+/tmp/fp8_mfma_probe.cpp:7:9: error: '__builtin_amdgcn_mfma_f32_16x16x32_fp8_fp8' needs target feature fp8-insts
+    7 |   acc = __builtin_amdgcn_mfma_f32_16x16x32_fp8_fp8(a, b, acc, 0, 0, 0);
+      |         ^
+1 error generated when compiling for gfx1151.
+failed to execute:/opt/rocm/lib/llvm/bin/clang++  --offload-arch=gfx1151 --driver-mode=g++ -L/opt/rocm/lib --hip-link  -O2 -x hip /tmp/fp8_mfma_probe.cpp -o "/tmp/fp8_mfma_probe_gfx1151"
+
+ERROR conda.cli.main_run:execute(124): `conda run hipcc -O2 --offload-arch=gfx1151 /tmp/fp8_mfma_probe.cpp -o /tmp/fp8_mfma_probe_gfx1151` failed. (See above for error)

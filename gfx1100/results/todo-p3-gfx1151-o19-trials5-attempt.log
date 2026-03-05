@@ -1,0 +1,25 @@
+baseline_kernels_bench.gfx1151: /usr/src/debug/hip-runtime/rocm-systems-rocm-7.2.0/projects/clr/hipamd/src/hip_code_object.cpp:400: hipError_t hip::StatCO::getStatFunc(ihipModuleSymbol_t**, const void*, int): Assertion `err == hipSuccess' failed.
+Traceback (most recent call last):
+  File "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/./baseline-benchmark.py", line 631, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/./baseline-benchmark.py", line 489, in main
+    proc = run_cmd(cmd, root)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/./baseline-benchmark.py", line 52, in run_cmd
+    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lhl/mambaforge/envs/therock/lib/python3.12/subprocess.py", line 573, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/build/baseline_kernels_bench.gfx1151', '--mode', 'fp8', '--elements', '262144', '--threads', '256', '--items-per-thread', '1', '--inner-int8', '64', '--inner-fp8', '16', '--warmup-runs', '40', '--min-runs', '200', '--max-runs', '200000', '--reps-per-run', '200', '--target-seconds', '60.0', '--seed', '1337', '--fp8-quantized-io']' died with <Signals.SIGABRT: 6>.
+
+ERROR conda.cli.main_run:execute(124): `conda run ./baseline-benchmark.py --arch gfx1151 --force-rebuild --mode fp8 --target-seconds 60 --min-runs 200 --reps-per-run 200 --elements 262144 --inner-fp8 16 --threads 256 --items-per-thread 1 --fp8-quantized-io --trials 5 --stats-out results/todo-p3-gfx1151-o19-trials5-attempt.json` failed. (See above for error)
+[build] /opt/rocm/bin/hipcc -O3 --offload-arch=gfx1151 /home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/benchmarks/baseline_kernels_bench.cpp -o /home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/build/baseline_kernels_bench.gfx1151
+/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/benchmarks/baseline_kernels_bench.cpp:858:17: warning: loop not unrolled: the optimizer was unable to perform the requested transformation; the transformation might be disabled or specified as part of an unsupported transformation ordering [-Wpass-failed=transform-warning]
+  858 | __global__ void int8_dot4_kernel_unrolled_scalar_advanced(
+      |                 ^
+/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/benchmarks/baseline_kernels_bench.cpp:858:17: warning: loop not unrolled: the optimizer was unable to perform the requested transformation; the transformation might be disabled or specified as part of an unsupported transformation ordering [-Wpass-failed=transform-warning]
+/home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/benchmarks/baseline_kernels_bench.cpp:858:17: warning: loop not unrolled: the optimizer was unable to perform the requested transformation; the transformation might be disabled or specified as part of an unsupported transformation ordering [-Wpass-failed=transform-warning]
+3 warnings generated when compiling for gfx1151.
+[run 1/5] /home/lhl/github/lhl/fsr4-rdna3-optimization/gfx1100/build/baseline_kernels_bench.gfx1151 --mode fp8 --elements 262144 --threads 256 --items-per-thread 1 --inner-int8 64 --inner-fp8 16 --warmup-runs 40 --min-runs 200 --max-runs 200000 --reps-per-run 200 --target-seconds 60.0 --seed 1337 --fp8-quantized-io
+

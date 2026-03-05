@@ -1,0 +1,14 @@
+{
+  "timestamp_utc": "2026-03-05T16:06:12.513744+00:00",
+  "status": "ok",
+  "method": "rocprofv3 --kernel-trace --stats --summary",
+  "note": "Initial --stats-only attempts failed on this rocprofv3 build; rerun succeeded with explicit tracing option.",
+  "artifacts": {
+    "baseline_kernel_stats_csv": "results/todo-p2-rocprof-fp8-baseline_kernel_stats.csv",
+    "baseline_kernel_trace_csv": "results/todo-p2-rocprof-fp8-baseline_kernel_trace.csv",
+    "baseline_summary": "results/todo-p2-rocprof-fp8-baseline_results/todo-p2-rocprof-fp8-baseline-summary.txt.txt",
+    "candidate_kernel_stats_csv": "results/todo-p2-rocprof-fp8-inner8_kernel_stats.csv",
+    "candidate_kernel_trace_csv": "results/todo-p2-rocprof-fp8-inner8_kernel_trace.csv",
+    "candidate_summary": "results/todo-p2-rocprof-fp8-inner8_results/todo-p2-rocprof-fp8-inner8-summary.txt.txt"
+  }
+}

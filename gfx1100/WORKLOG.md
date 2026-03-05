@@ -1,5 +1,40 @@
 # WORKLOG (gfx1100)
 
+## 2026-03-06
+- Executed and closed the full post-default TODO sweep (`P0`/`P1`/`P2`) with deterministic artifacts under `gfx1100/results/todo-*`.
+- Integrated final mode-specific policy validation (5-trial each):
+  - INT8 policy run:
+    - `results/gfx1100-final-policy-int8-items4-inner16-trials5.json`
+    - classification: `results/gfx1100-final-policy-int8-items4-inner16-trials5-classification.json`
+    - mean-of-mean: `0.006834 ms`, mean-cv `1.412%`, verdict `keep` (`+11.484%` median vs canonical shared-default ref)
+  - FP8 policy run:
+    - `results/gfx1100-final-policy-fp8-items1-inner8-trials5.json`
+    - classification: `results/gfx1100-final-policy-fp8-items1-inner8-trials5-classification.json`
+    - mean-of-mean: `0.010006 ms`, mean-cv `1.568%`, verdict `keep` (`+6.124%` median vs canonical shared-default ref)
+  - Combined policy summary:
+    - `results/gfx1100-final-policy-summary.json`
+    - total mean (`int8+fp8`): `0.016839 ms` vs canonical `0.018353 ms` (`+8.249%`)
+- Added workflow integration helper:
+  - `gfx1100/run_final_policy.sh` to rerun/refresh final INT8+FP8 policy artifacts.
+- Completed P2 profiling/disassembly closure:
+  - Fixed `rocprofv3` usage to require explicit tracing (`--kernel-trace --stats --summary`) and `--` app separator.
+  - Produced profile artifacts:
+    - `results/todo-p2-rocprof-fp8-baseline_kernel_stats.csv`
+    - `results/todo-p2-rocprof-fp8-inner8_kernel_stats.csv`
+    - `results/todo-p2-rocprof-status.json`
+  - Generated ISA summaries:
+    - `results/todo-p2-disasm-gfx1100-summary.json`
+    - `results/todo-p2-disasm-gfx1151-summary.json`
+    - `results/todo-p2-disasm-int8-kernels-compare.json`
+- P3 status closure:
+  - FP8 WMMA/MFMA prototype attempt blocked by target-feature availability (`fp8-insts`) on both `gfx1100` and `gfx1151` compile attempts.
+    - `results/todo-p3-fp8-wmma-mfma-prototype-status.json`
+  - gfx1151 O19 trials=5 cross-validation attempt failed as expected on W7900 host (gfx1151 code object runtime dispatch unsupported).
+    - `results/todo-p3-gfx1151-o19-trials5-attempt-status.json`
+- Updated docs to reflect final numbers and full optimization status:
+  - `gfx1100/README.md`
+  - `gfx1100/TODO.md`
+
 ## 2026-03-05
 - Promoted optimized FP8 path to default for `gfx1100` harness:
   - `gfx1100/benchmarks/baseline_kernels_bench.cpp`: `fp8_quantized_io = true`

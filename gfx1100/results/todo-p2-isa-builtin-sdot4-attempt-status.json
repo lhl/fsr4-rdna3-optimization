@@ -1,0 +1,6 @@
+{
+  "timestamp_utc": "2026-03-05T15:37:28.648424+00:00",
+  "status": "failed",
+  "exit_code": 1,
+  "note": "gfx1100 compile attempt for __builtin_amdgcn_sdot4 with -DENABLE_ISA_SDOT4_VARIANT=1"
+}

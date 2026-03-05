@@ -1,0 +1,66 @@
+{
+  "gfx1100": {
+    "asm_path": "build/disasm/gfx1100.s",
+    "targets": {
+      "runtime_packed": {
+        "function": "_Z24int8_dot4_kernel_runtimePKaS0_Piiii",
+        "v_dot4_like": 1,
+        "v_mad_or_mac_like": 1,
+        "v_mul_like": 1,
+        "s_waitcnt": 7,
+        "buffer_or_global_loads": 5,
+        "buffer_or_global_stores": 1
+      },
+      "runtime_scalar": {
+        "function": "_Z31int8_dot4_kernel_runtime_scalarPKaS0_Piiii",
+        "v_dot4_like": 2,
+        "v_mad_or_mac_like": 4,
+        "v_mul_like": 3,
+        "s_waitcnt": 4,
+        "buffer_or_global_loads": 2,
+        "buffer_or_global_stores": 1
+      },
+      "runtime_sdot4": {
+        "function": "_Z30int8_dot4_kernel_runtime_sdot4PKaS0_Piiii",
+        "v_dot4_like": 1,
+        "v_mad_or_mac_like": 1,
+        "v_mul_like": 1,
+        "s_waitcnt": 4,
+        "buffer_or_global_loads": 2,
+        "buffer_or_global_stores": 1
+      }
+    }
+  },
+  "gfx1151": {
+    "asm_path": "build/disasm/gfx1151.s",
+    "targets": {
+      "runtime_packed": {
+        "function": "_Z24int8_dot4_kernel_runtimePKaS0_Piiii",
+        "v_dot4_like": 1,
+        "v_mad_or_mac_like": 1,
+        "v_mul_like": 1,
+        "s_waitcnt": 7,
+        "buffer_or_global_loads": 5,
+        "buffer_or_global_stores": 1
+      },
+      "runtime_scalar": {
+        "function": "_Z31int8_dot4_kernel_runtime_scalarPKaS0_Piiii",
+        "v_dot4_like": 2,
+        "v_mad_or_mac_like": 4,
+        "v_mul_like": 3,
+        "s_waitcnt": 4,
+        "buffer_or_global_loads": 2,
+        "buffer_or_global_stores": 1
+      },
+      "runtime_sdot4": {
+        "function": "_Z30int8_dot4_kernel_runtime_sdot4PKaS0_Piiii",
+        "v_dot4_like": 1,
+        "v_mad_or_mac_like": 1,
+        "v_mul_like": 1,
+        "s_waitcnt": 4,
+        "buffer_or_global_loads": 2,
+        "buffer_or_global_stores": 1
+      }
+    }
+  }
+}
