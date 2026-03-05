@@ -3,6 +3,37 @@
 ## 2026-03-06
 
 ### Session Goal
+- Write an RDNA3/RDNA3.5-specific HLSL optimization guide and reconcile the gfx1151 and gfx1100 findings into one prioritized experiment list.
+
+### Changes / Commands
+- Audited cross-architecture findings from:
+  - `README.md`
+  - `ANALYSIS-HLSL.md`
+  - `gfx1100/README.md`
+  - `IMPLEMENTATION.md`
+  - `gfx1100/IMPLEMENTATION.md`
+- Re-checked DX12/HLSL build and runtime-selection plumbing in:
+  - `fsr4-src/baseline/internal/shader_selector.cpp`
+  - `fsr4-src/baseline/dx12/ffx_provider_fsr4_dx12.cpp`
+  - `fsr4-src/baseline/dx12/BuildFSR4UpscalerShaders.bat`
+  - `fsr4-src/baseline/dx12/GenerateFR4Files.vcxproj`
+- Added `HLSL-GOLFING-HOWTO.md` covering:
+  - minimal Windows workflow notes
+  - INT8/DOT4 vs WMMA path-selection caveats
+  - the lack of an obvious in-tree `gfx1100`/`gfx1151` DXC target switch
+  - prioritized HLSL operator targets for cross-arch golfing
+
+### Benchmarks
+- No new benchmark runs in this session (documentation/analysis only).
+
+### Validation / Results
+- Verified that the new guide matches the current source tree:
+  - `FSR4_ENABLE_DOT4` is required for INT8 blob selection
+  - `MLSR-WMMA` is the runtime gate that keeps WMMA off when unset
+  - the generated source in-tree is tagged `navi48`
+  - this repo does not expose an obvious standalone provider-DLL project or the checked-in generated blob headers required by `shader_selector.cpp`
+
+### Session Goal
 - Clean up small README errata after a doc review.
 
 ### Changes / Commands
