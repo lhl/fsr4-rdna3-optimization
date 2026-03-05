@@ -23,7 +23,7 @@ FSR4 uses a **quantized CNN** compiled from ONNX to HLSL shaders via ML2Code. In
   - Postprocessing: RCAS (Robust Contrast Adaptive Sharpening) and SPD (Single Pass Downsampler) with auto exposure
 - **Compute passes**: 14 model passes (`pass0..pass13`) plus 13 post passes (`pass0_post..pass12_post`) at 1080p
 - **Scratch memory**: ~20 MB
-- **Weights**: ~88 KB per quality tier (quantized, stored as embedded dwords or `initializers.bin`)
+- **Weights**: ~89 KB (INT8) or ~130 KB (FP8) per quality tier (`initializers.bin` or embedded dwords)
 - **Input**: NHWC layout, 7 input channels (current + history frames), resolution-specific shaders for 1080p/2160p/4320p
 - **Quantization**: INT8 (fixed-point with learned scale/bias) or FP8 (e4m3 format); accumulation in FP32, quantized at store
 
@@ -74,6 +74,8 @@ Our HIP microkernels exercise the same *class* of quantized arithmetic that FSR4
 | **Quantization** | Scale/bias dequantization with store-time requant | Same policy (FP32 accumulation, quantize once at store) but with structured per-layer learned scales |
 
 The harness is most useful as a **directional signal** about RDNA3.5 arithmetic throughput and memory behavior at the instruction level, not as a cycle-accurate proxy for full FSR4 frame time.
+
+The generated HLSL audited in this tree was emitted for `navi48`, not `gfx1151`, so code-shape observations should be treated as directional unless recompiled per target.
 
 ### Real-World Implications
 
@@ -242,7 +244,6 @@ Notes:
 │   ├── baseline/                # Immutable FSR4 source snapshot (HLSL shaders + weights)
 │   └── opt/                     # Optimization workspace
 ├── results/                     # Benchmark JSON outputs and latest symlink files
-├── reference/                   # External reference material/checkouts
 ├── AGENTS.md                    # Environment + workflow instructions
 ├── README.md                    # Single-glance project summary (this file)
 ├── ANALYSIS.md                  # Extended analysis snapshot/history

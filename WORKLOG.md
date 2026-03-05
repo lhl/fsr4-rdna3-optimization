@@ -1,5 +1,22 @@
 # Work Log
 
+## 2026-03-06
+
+### Session Goal
+- Clean up small README errata after a doc review.
+
+### Changes / Commands
+- Updated `README.md`:
+  - corrected the per-tier weight-size wording to distinguish INT8 vs FP8
+  - removed `reference/` from the checked-in repo layout
+  - added a short caveat that the audited generated shaders in-tree were emitted for `navi48`
+
+### Benchmarks
+- No new benchmark runs in this session (documentation cleanup only).
+
+### Validation / Results
+- Re-checked the README edits against the current tree layout, `initializers.bin` sizes, and generated shader headers.
+
 ## 2026-03-05
 
 ### Session Goal
