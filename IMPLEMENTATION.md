@@ -39,6 +39,16 @@ Variance gates:
 - Decision: `Keep` or `Rollback`
 - Notes:
 
+### 2026-03-12: DOC RDNA4-only source audit
+- Scope: Document which released FSR4 source features are actually WMMA or RDNA4-leaning, separate INT8 vs FP8 kernel dependencies, assess the relevance of the cited Reddit claim vocabulary against the released HLSL, and spell out what an RDNA3 or RDNA3.5 FP8-model port would require.
+- Files changed: `RDNA4-ONLY.md`, `WORKLOG.md`, `IMPLEMENTATION.md`
+- Validation: Re-audited runtime-selection plumbing and operator source files; verified that the active checked-in INT8 path is non-WMMA, that the FP8 path is WMMA-only in source, and that the prepass uses `F16` WMMA while the fused FP8 body keeps re-quantizing intermediates back into FP8 wave-matrix objects.
+- Benchmark command: none (documentation-only session)
+- INT8 result: none (no benchmark run)
+- FP8 result: none (no benchmark run)
+- Decision: `Keep`
+- Notes: The updated doc now distinguishes source-visible dependencies (`dot2add`, `dot4add_i8packed`, `AmdWaveMatrixMultiply`, `groupshared`, `SampleLevel`) from backend-style counter names in the Reddit comment (`loadcnt`, `samplecnt`, `storecnt`, `bvhcnt`, `kmcnt`, `dscnt`), and concludes that an RDNA3-capable FP8-model path would need a separate `F16`-WMMA shader family rather than a trivial format toggle in the existing FP8 HLSL.
+
 ### 2026-02-27: O01 Benchmark Protocol Lock (initial capture)
 - Scope: Establish baseline harness with minimum-duration sampling and variance metrics.
 - Files changed: `baseline-benchmark.py`, `benchmarks/baseline_kernels_bench.cpp`, `README.md`, `OPTIMIZATION_QUEUE.md`

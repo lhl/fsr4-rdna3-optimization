@@ -1,5 +1,48 @@
 # Work Log
 
+## 2026-03-12
+
+### Session Goal
+- Audit which released FSR4 source features are actually WMMA or RDNA4-leaning, separate INT8 vs FP8 dependencies, ground the analysis against the cited Reddit claim vocabulary, and capture what an RDNA3 or RDNA3.5 FP8-model port would require.
+
+### Changes / Commands
+- Audited source-visible feature usage in:
+  - `fsr4-src/baseline/internal/shaders/fsr4_model_v07_i8_balanced/passes_1080.hlsl`
+  - `fsr4-src/baseline/internal/shaders/fsr4_model_v07_fp8_no_scale_passes_1080.hlsl`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Conv2D_k2s2b.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/ConvNextBlock.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/FasterNetBlock.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/FNB_CT2D_ADD.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/int8_NHWC/Fused/FusedConv2D_k2s2b_QuantizedOutput.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/float8_NHWC/Conv2D_k2s2b.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/float16_NHWC/Fused/CNB_CT2D.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/float8_NHWC/Fused/ConvNextBlock.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/float8_NHWC/Fused/FasterNetBlock.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/float8_NHWC/Fused/FNB_CT2D_ADD.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/operators/float8_NHWC/Fused/FusedConv2D_k2s2b_QuantizedOutput.hlsli`
+  - `fsr4-src/baseline/dx12/ml2code_runtime/tensor_float8.hlsli`
+  - `fsr4-src/baseline/include/gpu/fsr4/pre_common.hlsli`
+  - `fsr4-src/baseline/include/gpu/fsr4/ffx_fsr4_upscale_resources.h`
+  - `fsr4-src/baseline/internal/shaders/pre_wmma.hlsl`
+  - `fsr4-src/baseline/internal/shaders/post_wmma.hlsl`
+  - `fsr4-src/baseline/internal/shaders/spd_auto_exposure.hlsl`
+- Re-checked WMMA and blob-selection plumbing in:
+  - `fsr4-src/baseline/dx12/ffx_provider_fsr4_dx12.cpp`
+  - `fsr4-src/baseline/internal/shader_selector.cpp`
+  - `fsr4-src/baseline/dx12/BuildFSR4UpscalerShaders.bat`
+- Verified the referenced Reddit permalink and updated:
+  - `RDNA4-ONLY.md`
+
+### Benchmarks
+- No new benchmark runs in this session (documentation and source audit only).
+
+### Validation / Results
+- Confirmed that the released source exposes WMMA dependencies explicitly only in the FP8 path and optional WMMA branches, while the active checked-in INT8 blob set remains source-visible and non-WMMA.
+- Confirmed that the Reddit comment's counter names (`loadcnt`, `bvhcnt`, `kmcnt`, `dscnt`, `samplecnt`, `storecnt`) do not appear in the released HLSL source as explicit primitives.
+- Confirmed that the visible wave-matrix tile shapes in audited source are `16x16`, not `32x32`.
+- Confirmed that the prepass already uses `F16` WMMA inputs and weights with FP8 export, while the fused FP8 model core and post path repeatedly `CopySat` intermediates back into FP8 wave-matrix objects.
+- Recorded the main RDNA3 or RDNA3.5 port conclusion: a usable FP8-model path would need a separate `F16`-WMMA shader family plus an explicit choice between preserving FP8 quantization boundaries or moving fused intermediates to `F16`.
+
 ## 2026-03-06
 
 ### Session Goal
